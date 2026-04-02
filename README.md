@@ -1,23 +1,29 @@
 # KANAnomalyDetector
 
-Сборка:
-Apt distros: 
-sudo apt install python3-venv
+![KANAnomalyDetector в режиме реального времени](assets/KANAnomalyDetector_v0.10-preview_realtime_mode.png)
 
-python3 -m venv venv
+![KANAnomalyDetector в режиме файла](assets/KANAnomalyDetector_v0.10-preview_file_mode.png)
 
-source venv/bin/activate
+**Сборка:**
 
-chmod +x build_linux.sh && ./build_linux.sh
+1. Apt distros: 
+`sudo apt install python3-venv`
 
-Запуск из исходников:
-Apt distros: 
-sudo apt install python3-venv
+2. `python3 -m venv venv`
 
-python3 -m venv venv
+3. `source venv/bin/activate`
 
-source venv/bin/activate
+4. `chmod +x build_linux.sh && ./build_linux.sh`
 
-pip install -r requirements.txt
+**Запуск из исходников:**
 
-python3 main.py
+1. Apt distros: 
+`sudo apt install python3-venv`
+
+2. `python3 -m venv venv`
+
+3. `source venv/bin/activate`
+
+4. `pip install -r requirements.txt`
+
+5. `python3 main.py`
