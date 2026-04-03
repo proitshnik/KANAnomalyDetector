@@ -6,6 +6,10 @@ from anomaly_formatting import AnomalyFormatter
 from anomaly_reporting import AnomalyReportSession, safe_pick
 from imitate import imitate_data
 from monitoring import monitor_data
+from filter import filter_data
+from app_logging import get_logger
+
+_worker_log = get_logger("workers")
 
 
 class FileModeWorker(QThread):
@@ -13,7 +17,7 @@ class FileModeWorker(QThread):
     progress_signal = pyqtSignal(dict)
     finished_signal = pyqtSignal()
 
-    def __init__(self, model, anomaly_module, config, start_index, end_index, extra_num):
+    def __init__(self, model, anomaly_module, config, start_index, end_index, extra_num, use_filter=False):
         super().__init__()
         self.model = model
         self.anomaly_module = anomaly_module
@@ -21,6 +25,8 @@ class FileModeWorker(QThread):
         self.start_index = start_index
         self.end_index = end_index
         self.extra_num = extra_num
+        # Используется в предобработке данных, здесь не используется
+        self.use_filter = use_filter
         self.stop_requested = None
 
     def run(self):
@@ -267,18 +273,27 @@ class RealTimeMonitorWorker(QThread):
     blink_start_signal = pyqtSignal()
     finished_signal = pyqtSignal()
 
-    def __init__(self, model, anomaly_module, monitor_file, input_length, output_length):
+    def __init__(self, model, anomaly_module, monitor_file, input_length, output_length, use_filter=False):
         super().__init__()
         self.model = model
         self.anomaly_module = anomaly_module
         self.monitor_file = monitor_file
         self.input_length = input_length
         self.output_length = output_length
+        self.use_filter = use_filter
+        # callback для получения значения чекбокса фильтрации из UI
+        self.use_filter_checkbox = None
         self.stop_requested = None
 
         self.realtime_real_buffer = []
         self.realtime_pred_buffer = []
         self.realtime_anomaly_indices = set()
+
+    def _is_filter_enabled(self):
+        """Проверяет текущее состояние фильтрации"""
+        if self.use_filter_checkbox is not None:
+            return self.use_filter_checkbox.isChecked()
+        return self.use_filter
 
     def run(self):
         try:
@@ -291,6 +306,15 @@ class RealTimeMonitorWorker(QThread):
                     # Первый шаг - берем последние input_length значений и делаем предсказание
                     if len(values) >= self.input_length:
                         real_seq = np.array(values[-self.input_length:])
+                        
+                        # Применяем фильтрацию, если нужно
+                        if self._is_filter_enabled():
+                            _worker_log.debug("Фильтрация: ВКЛЮЧЕНА")
+                            real_seq = filter_data(real_seq.tolist(), wavelet="db3", alpha=0.05, J=5, threshold_type="hard")
+                            real_seq = np.array(real_seq)
+                        else:
+                            _worker_log.debug("Фильтрация: ОТКЛЮЧЕНА")
+                        
                         norm_seq, seq_scaler = self.model.normalize_sequence(real_seq)
                         pred = self.model.predict(
                             norm_seq,
@@ -313,6 +337,13 @@ class RealTimeMonitorWorker(QThread):
 
                         if len(self.realtime_real_buffer) >= self.input_length:
                             real_seq = np.array(self.realtime_real_buffer[-self.input_length:])
+                            
+                            # Применяем фильтрацию, если нужно
+                            if self._is_filter_enabled():
+                                _worker_log.debug(f"Фильтрация применена к последовательности из {len(real_seq)} точек")
+                                real_seq = filter_data(real_seq.tolist(), wavelet="db3", alpha=0.05, J=5, threshold_type="hard")
+                                real_seq = np.array(real_seq)
+                            
                             norm_seq, seq_scaler = self.model.normalize_sequence(real_seq)
                             pred = self.model.predict(
                                 norm_seq,

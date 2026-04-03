@@ -227,7 +227,7 @@ class MainWindow(QWidget):
             "normalize_sequence": True,
         }
 
-    def _create_anomaly_and_model(self, data_path, anomaly_mode, percent, model_path, prepare_data=False):
+    def _create_anomaly_and_model(self, data_path, anomaly_mode, percent, model_path, prepare_data=False, use_filter=False):
         """
         Инициализирует модуль аномалий и модель для обнаружения аномалий.
         Если prepare_data True, выполняет полную подготовку данных для файлового режима.
@@ -251,6 +251,14 @@ class MainWindow(QWidget):
                 usage_volume=processing_config["usage_volume"], 
                 normalize_first=processing_config["normalize_first"]
             )
+            
+            # Применяем фильтрацию, если нужно (учитываем, что normalize_sequence включен и после фильтрации)
+            if use_filter:
+                _ui_log.info("Фильтрация: ВКЛЮЧЕНА")
+                model.filter_test_data()
+            else:
+                _ui_log.info("Фильтрация: ОТКЛЮЧЕНА")
+            
             model.prepare_data(
                 shuffle=processing_config["shuffle"], 
                 normalize_sequence=processing_config["normalize_sequence"]
@@ -268,7 +276,7 @@ class MainWindow(QWidget):
         self.last_pred = []
         self.last_anomalies = []
 
-    def run_evaluate(self, start_index, end_index, extra_num, anomaly_mode, percent):
+    def run_evaluate(self, start_index, end_index, extra_num, anomaly_mode, percent, use_filter=False):
         """Запуск проверки аномалий с заданными параметрами"""
         
         # Проверяем, что все потоки завершились
@@ -309,9 +317,9 @@ class MainWindow(QWidget):
 
             self.serviceLayout.data_file_label.setVisible(True)
             self.serviceLayout.load_data_button.setVisible(True)
-            self.start_file_mode(start_index, end_index, extra_num, anomaly_mode, percent)
+            self.start_file_mode(start_index, end_index, extra_num, anomaly_mode, percent, use_filter)
 
-    def start_file_mode(self, start_index, end_index, extra_num, anomaly_mode, percent):
+    def start_file_mode(self, start_index, end_index, extra_num, anomaly_mode, percent, use_filter=False):
         """Запуск проверки аномалий в режиме файла с заданными параметрами"""
         self._start_mode()
         self._init_graph_and_buffers()
@@ -319,11 +327,15 @@ class MainWindow(QWidget):
         _ui_log.info(f"Запуск файлового режима: {datetime.datetime.now().isoformat()}")
         _ui_log.info(f"Способ проверки: {anomaly_mode}, порог={percent}%")
         _ui_log.info(f"Модель: {self.serviceLayout.model_path}")
+        _ui_log.info(f"Фильтрация: {'ВКЛЮЧЕНА' if use_filter else 'ОТКЛЮЧЕНА'}")
+        
+        # Деактивируем чекбокс фильтрации на время обработки файла
+        self.controlLayout.use_filter.setEnabled(False)
 
         # Setup worker для инициализации модели и модуля аномалий в режиме файла с подготовкой данных
         self.file_setup_worker = SetupWorker(
             realtime_setup_fn=lambda: self._create_anomaly_and_model(
-                self.serviceLayout.data_path, anomaly_mode, percent, self.serviceLayout.model_path, prepare_data=True
+                self.serviceLayout.data_path, anomaly_mode, percent, self.serviceLayout.model_path, prepare_data=True, use_filter=use_filter
             )
         )
 
@@ -331,11 +343,12 @@ class MainWindow(QWidget):
             """Callback при успешной инициализации модели в режиме файла"""
             if self.stop_requested:
                 _ui_log.warning("Инициализация отменена по запросу пользователя")
+                self.controlLayout.use_filter.setEnabled(True)
                 self._restore_buttons()
                 return
 
             self.file_mode_worker = FileModeWorker(
-                model, anomaly_module, config, start_index, end_index, extra_num
+                model, anomaly_module, config, start_index, end_index, extra_num, use_filter
             )
             self.file_mode_worker.stop_requested = lambda: self.stop_requested
             self.file_mode_worker.progress_signal.connect(self.on_progress_update)
@@ -345,6 +358,7 @@ class MainWindow(QWidget):
         def on_file_error(msg):
             """Callback при ошибке инициализации модели в режиме файла"""
             _ui_log.error(f"Ошибка инициализации модели: {msg}")
+            self.controlLayout.use_filter.setEnabled(True)
             self._restore_buttons()
 
         self.file_setup_worker.ready_signal.connect(on_file_ready)
@@ -388,9 +402,12 @@ class MainWindow(QWidget):
             else:
                 _ui_log.info("Встроенная имитация отключена, используется работа с другим поставщиком данных")
 
+            use_filter = self.controlLayout.use_filter.isChecked()
             self.realtime_monitor_worker = RealTimeMonitorWorker(
-                model, anomaly_module, monitor_file, config["input_length"], config["output_length"]
+                model, anomaly_module, monitor_file, config["input_length"], config["output_length"], use_filter=use_filter
             )
+            
+            self.realtime_monitor_worker.use_filter_checkbox = self.controlLayout.use_filter
             self.realtime_monitor_worker.stop_requested = lambda: self.stop_requested
             self.realtime_monitor_worker.graph_update_signal.connect(self._on_graph_update_signal)
             self.realtime_monitor_worker.output_signal.connect(self._on_output_signal)
@@ -401,6 +418,7 @@ class MainWindow(QWidget):
         def on_error(msg):
             """Callback при ошибке инициализации модели в режиме реального времени"""
             _ui_log.error(f"Ошибка запуска realtime: {msg}")
+            self.controlLayout.use_filter.setEnabled(True)
             self._restore_buttons()
 
         self.realtime_setup_worker.ready_signal.connect(on_ready)
@@ -484,6 +502,7 @@ class MainWindow(QWidget):
         """Callback при завершении работы в режиме файла"""
         self.is_running = False
         self._restore_buttons()
+        self.controlLayout.use_filter.setEnabled(True)
         if self.stop_requested:
             _ui_log.warning("Режим файла остановлен пользователем")
         else:
