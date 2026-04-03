@@ -20,6 +20,7 @@ from kan import *
 
 _log = get_logger("train_standalone")
 
+
 if __name__ == "__main__":
     configure_standalone_logging()
 
@@ -72,10 +73,15 @@ if __name__ == "__main__":
     lamb = 0.01
     lamb_entropy = 2.
     
+    # Фильтрация
+    use_filter = False
+    
     # Визуализация
     symbolic_view_flag = False
     plot_view_flag = False
     comparison_flag = False
+    
+    # Обнаружение аномалий
     anomaly_detection = False
     
     # ===============================
@@ -118,6 +124,14 @@ if __name__ == "__main__":
     _log.info("Разделение и нормализация данных...")
     predictor.split_and_normalize(usage_volume=usage_volume, normalize_first=normalize_first)
     
+    # Применяем фильтрацию, если нужно (учитываем, что normalize_sequence включен и после фильтрации)
+    if use_filter:
+        _log.info("Фильтрация: ВКЛЮЧЕНА")
+        predictor.filter_train_data()
+        predictor.filter_test_data()
+    else:
+        _log.info("Фильтрация: ОТКЛЮЧЕНА")
+     
     _log.info("Подготовка данных...")
     predictor.prepare_data(shuffle=shuffle, normalize_sequence=normalize_sequence)
     
