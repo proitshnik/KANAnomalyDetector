@@ -62,10 +62,15 @@ if __name__ == "__main__":
     k = 3
     seed = 0
     
+    # Фильтрация
+    use_filter = False
+    
     # Визуализация
-    symbolic_view_flag = True
+    symbolic_view_flag = False
     plot_view_flag = False
     comparison_flag = True
+    
+    # Обнаружение аномалий
     anomaly_detection = False
     
     # ===============================
@@ -106,6 +111,13 @@ if __name__ == "__main__":
     
     _log.info("Разделение и нормализация данных...")
     predictor.split_and_normalize(usage_volume=usage_volume, normalize_first=normalize_first)
+    
+    # Применяем фильтрацию, если нужно (учитываем, что normalize_sequence включен и после фильтрации)
+    if use_filter:
+        _log.info("Фильтрация: ВКЛЮЧЕНА")
+        predictor.filter_test_data()
+    else:
+        _log.info("Фильтрация: ОТКЛЮЧЕНА")
     
     _log.info("Подготовка данных...")
     predictor.prepare_data(shuffle=shuffle, normalize_sequence=normalize_sequence)
