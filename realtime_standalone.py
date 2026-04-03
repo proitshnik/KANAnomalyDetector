@@ -9,6 +9,7 @@ Realtime Mode.
 from app_logging import get_logger, configure_standalone_logging
 from core import KANAnomalyDetector
 from monitoring import monitor_data
+from filter import filter_data
 
 import numpy as np
 
@@ -71,6 +72,9 @@ if __name__ == "__main__":
     k = 3
     seed = 0
     
+    # Фильтрация
+    use_filter = False
+    
     # ===============================
     # РЕГУЛИРОВКА ДЛЯ РЕАЛЬНОГО ВРЕМЕНИ
     # ===============================
@@ -118,6 +122,13 @@ if __name__ == "__main__":
         _log.info("Разделение и нормализация данных...")
         predictor.split_and_normalize(usage_volume=usage_volume, normalize_first=normalize_first)
         
+        # Применяем фильтрацию, если нужно (учитываем, что normalize_sequence включен и после фильтрации)
+        if use_filter:
+            _log.info("Фильтрация: ВКЛЮЧЕНА")
+            predictor.filter_test_data()
+        else:
+            _log.info("Фильтрация: ОТКЛЮЧЕНА")
+        
         _log.info("Подготовка данных...")
         predictor.prepare_data(shuffle=shuffle, normalize_sequence=normalize_sequence)
     
@@ -153,6 +164,15 @@ if __name__ == "__main__":
             # Первый шаг - берем последние input_length значений и делаем предсказание
             if len(values) >= input_length:
                 real_seq = np.array(values[-input_length:])
+                
+                # Применяем фильтрацию, если нужно
+                if use_filter:
+                    _log.info("Фильтрация: ВКЛЮЧЕНА")
+                    real_seq = filter_data(real_seq.tolist(), wavelet="db3", alpha=0.05, J=5, threshold_type="hard")
+                    real_seq = np.array(real_seq)
+                else:
+                    _log.info("Фильтрация: ОТКЛЮЧЕНА")
+                
                 norm_seq, seq_scaler = predictor.normalize_sequence(real_seq)
                 pred = predictor.predict(
                     norm_seq,
@@ -178,6 +198,13 @@ if __name__ == "__main__":
                 
                 if len(state['realtime_real_buffer']) >= input_length:
                     real_seq = np.array(state['realtime_real_buffer'][-input_length:])
+                    
+                    # Применяем фильтрацию, если нужно
+                    if use_filter:
+                        _log.debug(f"Фильтрация применена к последовательности из {len(real_seq)} точек")
+                        real_seq = filter_data(real_seq.tolist(), wavelet="db3", alpha=0.05, J=5, threshold_type="hard")
+                        real_seq = np.array(real_seq)
+                    
                     norm_seq, seq_scaler = predictor.normalize_sequence(real_seq)
                     pred = predictor.predict(
                         norm_seq,
