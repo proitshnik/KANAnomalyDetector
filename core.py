@@ -11,6 +11,7 @@ import torch
 from kan import *
 
 from app_logging import get_logger, init_default_logging_if_needed
+from filter import filter_data
 
 # from sympy import sympify, latex
 # from IPython.display import display, Math
@@ -405,3 +406,24 @@ class KANAnomalyDetector:
       _log.info("График сохранён в %s", save_path2)
     except Exception as e:
       _log.warning("Не удалось сохранить HTML: %s", e)
+
+  def filter_train_data(self):
+    """Применить фильтрацию к тренировочным данным"""
+    if self.train_data is not None and len(self.train_data) > 0:
+      _log.info(f"Фильтрация тренировочных данных ({len(self.train_data)} точек)...")
+      self.train_data = np.array(filter_data(self.train_data.tolist(), wavelet="db3", alpha=0.05, J=5, threshold_type="hard"))
+      _log.debug(f"Фильтрация применена к тренировочным данным")
+
+  def filter_test_data(self):
+    """Применить фильтрацию к тестовым данным"""
+    if self.test_data is not None and len(self.test_data) > 0:
+      _log.info(f"Фильтрация тестовых данных ({len(self.test_data)} точек)...")
+      self.test_data = np.array(filter_data(self.test_data.tolist(), wavelet="db3", alpha=0.05, J=5, threshold_type="hard"))
+      _log.debug(f"Фильтрация применена к тестовым данным")
+
+  def filter_raw_data(self):
+    """Применить фильтрацию к изначально загруженным данным (после load_data)"""
+    if self.raw_data is not None and len(self.raw_data) > 0:
+      _log.info(f"Фильтрация исходных данных ({len(self.raw_data)} точек)...")
+      self.raw_data = np.array(filter_data(self.raw_data.tolist(), wavelet="db3", alpha=0.05, J=5, threshold_type="hard"))
+      _log.debug(f"Фильтрация применена к исходным данным")
