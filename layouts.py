@@ -127,6 +127,11 @@ class ControlLayout(QBoxLayout):
         self.addWidget(self.extra_num_label)
         self.addWidget(self.extra_num_edit)
         
+        # Фильтрация данных (с помощью вейвлет-пакетов и пороговой функции)
+        self.use_filter = QCheckBox("Применить вейвлет-фильтрацию")
+        self.use_filter.setChecked(False)
+        self.addWidget(self.use_filter)
+        
         # Выбор режима работы
         self.file_mode = QCheckBox("Режим файла")
         self.file_mode.setChecked(True)
@@ -251,12 +256,14 @@ class ControlLayout(QBoxLayout):
         if self.on_evaluate_requested:
             anomaly_mode = self.anomaly_mode_combo.currentText()
             percent = float(self.percent_edit.text()) if anomaly_mode == "Процент отклонения" else None
+            use_filter = self.use_filter.isChecked()
             self.on_evaluate_requested(
                 self._get_safe_index(self.start_index_edit.text()),
                 self._get_safe_index(self.end_index_edit.text()),
                 self._get_safe_extra(self.extra_num_edit.text()),
                 anomaly_mode,
-                percent
+                percent,
+                use_filter
             )
     
     def on_stop_button_clicked(self):
