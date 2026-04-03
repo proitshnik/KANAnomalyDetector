@@ -1,1 +1,1 @@
-PROGRAM_VERSION = "v0.10-preview"
+PROGRAM_VERSION = "v0.11"
