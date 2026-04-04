@@ -127,8 +127,10 @@ class ControlLayout(QBoxLayout):
         self.addWidget(self.extra_num_label)
         self.addWidget(self.extra_num_edit)
         
-        # Фильтрация данных (с помощью вейвлет-пакетов и пороговой функции)
-        self.use_filter = QCheckBox("Применить вейвлет-фильтрацию")
+        # Фильтрация данных 
+        # (текущая реализация с помощью вейвлет-пакетов и пороговой функции, 
+        # возможно расширение на различные режимы в будущем)
+        self.use_filter = QCheckBox("Применить фильтрацию")
         self.use_filter.setChecked(False)
         self.addWidget(self.use_filter)
         
