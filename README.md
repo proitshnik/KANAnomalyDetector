@@ -12,8 +12,10 @@
 1. `python3 -m venv venv`
 
 2. `source venv/bin/activate`
+   
+3. `pip install -r requirements.txt`
 
-3. `chmod +x build_linux.sh && ./build_linux.sh`
+4. `chmod +x build_linux.sh && ./build_linux.sh`
 
 **Запуск из исходников:**
 
