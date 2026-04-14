@@ -73,10 +73,10 @@ def filter_data(data, wavelet = "db3", alpha = 0.05, J = 5, threshold_type = "ha
 
     # Преобразуем входные данные в numpy для удобства обработки
     np_data = np.array(data, dtype=float)
-    _filter_log.info(f"Начало фильтрации данных. Длина входных данных: {len(data)}, wavelet: '{wavelet}', alpha: {alpha}, maxlevel: {J}, threshold_type: '{threshold_type}'.")
+    _filter_log.debug(f"Начало фильтрации данных. Длина входных данных: {len(data)}, wavelet: '{wavelet}', alpha: {alpha}, maxlevel: {J}, threshold_type: '{threshold_type}'.")
 
     # 2–3 Разложение в вейвлет-пакеты (рекурсивно до уровня J)
-    _filter_log.info(f"Начало разложения данных в дерево вейвлет-пакетов с wavelet='{wavelet}', maxlevel={J} и mode='symmetric'.")
+    _filter_log.debug(f"Начало разложения данных в дерево вейвлет-пакетов с wavelet='{wavelet}', maxlevel={J} и mode='symmetric'.")
     wp = pywt.WaveletPacket(
         data=np_data,
         wavelet=wavelet,
@@ -85,13 +85,13 @@ def filter_data(data, wavelet = "db3", alpha = 0.05, J = 5, threshold_type = "ha
     )
 
     # 4–5 Пороги и информационные компоненты в каждом узле
-    _filter_log.info(f"Рассчет порогов и определение информационных компонент для каждого узла дерева вейвлет-пакета, alpha={alpha}, threshold_type={threshold_type}.")
+    _filter_log.debug(f"Рассчет порогов и определение информационных компонент для каждого узла дерева вейвлет-пакета, alpha={alpha}, threshold_type={threshold_type}.")
     apply_thresholds_wp(wp, alpha, threshold_type)
 
     # 6 Вейвлет-восстановление сигнала
-    _filter_log.info(f"Начало вейвлет-восстановления данных после применения порогов.")
+    _filter_log.debug(f"Начало вейвлет-восстановления данных после применения порогов.")
     filtered = wp.reconstruct(update=False)
 
     # Возвращаем данные той же длины, что и исходные
-    _filter_log.info(f"Фильтрация завершена. Исходная длина данных: {len(data)}, длина отфильтрованных данных: {len(filtered)} (возвращаем длину исходных данных).")
+    _filter_log.debug(f"Фильтрация завершена. Исходная длина данных: {len(data)}, длина отфильтрованных данных: {len(filtered)} (возвращаем длину исходных данных).")
     return filtered[:len(data)].tolist()
