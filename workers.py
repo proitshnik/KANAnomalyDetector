@@ -249,18 +249,18 @@ class RealTimeImitateWorker(QThread):
 
 
 class SetupWorker(QThread):
-    """Worker для выполнения настройки в реальном времени - выполняет переданную функцию realtime_setup_fn, которая должна вернуть anomaly_module, model и config, и отправляет их через сигнал ready_signal. Если возникает ошибка, отправляет сообщение об ошибке через error_signal"""
+    """Worker для выполнения настройки в реальном времени - выполняет переданную функцию setup_fn, которая должна вернуть anomaly_module, model и config, и отправляет их через сигнал ready_signal. Если возникает ошибка, отправляет сообщение об ошибке через error_signal"""
     # anomaly_module, model, config
     ready_signal = pyqtSignal(object, object, object)
     error_signal = pyqtSignal(str)
 
-    def __init__(self, realtime_setup_fn):
+    def __init__(self, setup_fn):
         super().__init__()
-        self._realtime_setup_fn = realtime_setup_fn
+        self._setup_fn = setup_fn
 
     def run(self):
         try:
-            anomaly_module, model, config = self._realtime_setup_fn()
+            anomaly_module, model, config = self._setup_fn()
             self.ready_signal.emit(anomaly_module, model, config)
         except Exception as e:
             self.error_signal.emit(str(e))

@@ -333,7 +333,7 @@ class MainWindow(QWidget):
 
         # Setup worker для инициализации модели и модуля аномалий в режиме файла с подготовкой данных
         self.file_setup_worker = SetupWorker(
-            realtime_setup_fn=lambda: self._create_anomaly_and_model(
+            setup_fn=lambda: self._create_anomaly_and_model(
                 self.serviceLayout.data_path, anomaly_mode, percent, self.serviceLayout.model_path, prepare_data=True, use_filter=use_filter
             )
         )
@@ -379,7 +379,7 @@ class MainWindow(QWidget):
 
         # Setup worker для инициализации модели и модуля аномалий в режиме файла без подготовки данных
         self.realtime_setup_worker = SetupWorker(
-            realtime_setup_fn=lambda: self._create_anomaly_and_model(None, anomaly_mode, percent, self.serviceLayout.model_path)
+            setup_fn=lambda: self._create_anomaly_and_model(None, anomaly_mode, percent, self.serviceLayout.model_path)
         )
 
         def on_ready(anomaly_module, model, config):
