@@ -13,8 +13,11 @@ _worker_log = get_logger("workers")
 
 
 class FileModeWorker(QThread):
-    """Worker для обработки данных из файла - выполняет предсказания, обнаруживает аномалии и отправляет обновления в UI через сигналы progress_signal и finished_signal. Реализует логику обработки данных в заданном диапазоне с учетом дополнительных точек, а также буферизацию для отображения на графике и предотвращения повторного обнаружения одних и тех же аномалий"""
+    """Worker для обработки данных из файла - выполняет предсказания, обнаруживает аномалии и отправляет обновления в UI через сигналы graph_update_signal, progress_signal и finished_signal. Реализует логику обработки данных в заданном диапазоне с учетом дополнительных точек, а также буферизацию для отображения на графике и предотвращения повторного обнаружения одних и тех же аномалий"""
+    graph_update_signal = pyqtSignal(list, list, list, list)
     progress_signal = pyqtSignal(dict)
+    output_anomaly_signal = pyqtSignal(str)
+    start_anomaly_signal = pyqtSignal()
     finished_signal = pyqtSignal()
 
     def __init__(self, model, anomaly_module, config, start_index, end_index, extra_num, use_filter=False):
@@ -97,14 +100,11 @@ class FileModeWorker(QThread):
             time_arr = list(range(len(prediction)))
             anomaly_indices = self.anomaly_module.detect(real_output_denorm, prediction)
 
-            self.progress_signal.emit(
-                {
-                    "graph_update": True,
-                    "time_arr": time_arr,
-                    "real": real_output_denorm,
-                    "pred": prediction,
-                    "anomalies": anomaly_indices,
-                }
+            self.graph_update_signal.emit(
+                time_arr,
+                real_output_denorm,
+                prediction,
+                anomaly_indices,
             )
 
             new_anomalies = report_session.new_indices(anomaly_indices)
@@ -116,8 +116,8 @@ class FileModeWorker(QThread):
                     title="Первые обнаруженные аномалии",
                 )
                 if msg:
-                    self.progress_signal.emit({"anomaly_msg": msg})
-                    self.progress_signal.emit({"anomaly_detected": True})
+                    self.output_anomaly_signal.emit(msg)
+                    self.start_anomaly_signal.emit()
 
             self.progress_signal.emit(
                 {"step_msg": f"Step {1}/{right_range-left_range}: {prediction[-1]}, {real_output_denorm[-1]}"}
@@ -164,17 +164,14 @@ class FileModeWorker(QThread):
                             title=f"Аномалия в точке {idx}",
                         )
                         if msg:
-                            self.progress_signal.emit({"anomaly_msg": msg})
-                            self.progress_signal.emit({"anomaly_detected": True})
+                            self.output_anomaly_signal.emit(msg)
+                            self.start_anomaly_signal.emit()
 
-                self.progress_signal.emit(
-                    {
-                        "graph_update": True,
-                        "time_arr": time_arr,
-                        "real": real_output_denorm,
-                        "pred": prediction,
-                        "anomalies": anomaly_indices,
-                    }
+                self.graph_update_signal.emit(
+                    time_arr,
+                    real_output_denorm,
+                    prediction,
+                    anomaly_indices,
                 )
 
                 self.progress_signal.emit(
@@ -191,14 +188,11 @@ class FileModeWorker(QThread):
             time_arr = list(range(len(prediction)))
             anomaly_indices = self.anomaly_module.detect(real_output_denorm, prediction)
 
-            self.progress_signal.emit(
-                {
-                    "graph_update": True,
-                    "time_arr": time_arr,
-                    "real": real_output_denorm,
-                    "pred": prediction,
-                    "anomalies": anomaly_indices,
-                }
+            self.graph_update_signal.emit(
+                time_arr,
+                real_output_denorm,
+                prediction,
+                anomaly_indices,
             )
 
             if anomaly_indices:
@@ -267,10 +261,10 @@ class SetupWorker(QThread):
 
 
 class RealTimeMonitorWorker(QThread):
-    """Worker для мониторинга данных в реальном времени - читает данные из monitor_file, выполняет предсказания с помощью модели, обнаруживает аномалии с помощью anomaly_module и отправляет обновления в UI через сигналы graph_update_signal, output_signal и blink_start_signal. Реализует буферизацию данных для отображения на графике и предотвращения повторного обнаружения одних и тех же аномалий"""
+    """Worker для мониторинга данных в реальном времени - читает данные из monitor_file, выполняет предсказания с помощью модели, обнаруживает аномалии с помощью anomaly_module и отправляет обновления в UI через сигналы graph_update_signal, output_anomaly_signal и start_anomaly_signal. Реализует буферизацию данных для отображения на графике и предотвращения повторного обнаружения одних и тех же аномалий"""
     graph_update_signal = pyqtSignal(list, list, list, list)
-    output_signal = pyqtSignal(str)
-    blink_start_signal = pyqtSignal()
+    output_anomaly_signal = pyqtSignal(str)
+    start_anomaly_signal = pyqtSignal()
     finished_signal = pyqtSignal()
 
     def __init__(self, model, anomaly_module, monitor_file, input_length, output_length, use_filter=False):
@@ -415,8 +409,8 @@ class RealTimeMonitorWorker(QThread):
                                         title=f"Аномалия в точке {anomaly_idx}",
                                     )
                                     if anomaly_msg:
-                                        self.output_signal.emit(anomaly_msg)
-                                        self.blink_start_signal.emit()
+                                        self.output_anomaly_signal.emit(anomaly_msg)
+                                        self.start_anomaly_signal.emit()
 
                 for idx in self.realtime_anomaly_indices:
                     if idx < len(time_arr) and idx not in anomaly_indices_full:

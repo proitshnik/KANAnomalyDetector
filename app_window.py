@@ -17,14 +17,12 @@ _ui_log = get_logger("ui")
 
 class MainWindow(QWidget):
     # Сигналы для взаимодействия между потоками и UI
-    # Сигнал для запуска мигания при обнаружении аномалии
-    blink_start_signal = pyqtSignal()
-    # Сигнал для остановки мигания при фиксации аномалии пользователем
-    blink_stop_signal = pyqtSignal()
     # Сигнал для обновления графика с новыми данными (time_arr, real, pred, anomalies)
     graph_update_signal = pyqtSignal(list, list, list, list)
     # Сигнал прихода аномального события для последующего логирования
-    output_signal = pyqtSignal(str)
+    output_anomaly_signal = pyqtSignal(str)
+    # Сигнал для запуска событий обнаружения аномалии
+    start_anomaly_signal = pyqtSignal()
     # Сигнал для добавления сообщения в лог UI
     log_gui_message = pyqtSignal(str)
 
@@ -115,10 +113,9 @@ class MainWindow(QWidget):
         self.stop_requested = False
         
         # callbacks для сигналов от рабочих потоков
-        self.blink_start_signal.connect(self._on_blink_start)
-        self.blink_stop_signal.connect(self._on_blink_stop)
         self.graph_update_signal.connect(self._on_graph_update_signal)
-        self.output_signal.connect(self._on_output_signal)
+        self.output_anomaly_signal.connect(self._on_output_anomaly)
+        self.start_anomaly_signal.connect(self._on_start_anomaly)
         self.log_gui_message.connect(self.append_log_to_output)
 
     def append_log_to_output(self, text):
@@ -345,7 +342,10 @@ class MainWindow(QWidget):
                 model, anomaly_module, config, start_index, end_index, extra_num, use_filter
             )
             self.file_mode_worker.stop_requested = lambda: self.stop_requested
+            self.file_mode_worker.graph_update_signal.connect(self._on_graph_update_signal)
             self.file_mode_worker.progress_signal.connect(self.on_progress_update)
+            self.file_mode_worker.output_anomaly_signal.connect(self._on_output_anomaly)
+            self.file_mode_worker.start_anomaly_signal.connect(self._on_start_anomaly)
             self.file_mode_worker.finished_signal.connect(self.on_file_mode_finished)
             self.file_mode_worker.start()
 
@@ -404,8 +404,8 @@ class MainWindow(QWidget):
             self.realtime_monitor_worker.use_filter_checkbox = self.controlLayout.use_filter
             self.realtime_monitor_worker.stop_requested = lambda: self.stop_requested
             self.realtime_monitor_worker.graph_update_signal.connect(self._on_graph_update_signal)
-            self.realtime_monitor_worker.output_signal.connect(self._on_output_signal)
-            self.realtime_monitor_worker.blink_start_signal.connect(self._on_blink_start)
+            self.realtime_monitor_worker.output_anomaly_signal.connect(self._on_output_anomaly)
+            self.realtime_monitor_worker.start_anomaly_signal.connect(self._on_start_anomaly)
             self.realtime_monitor_worker.finished_signal.connect(self.on_monitor_finished)
             self.realtime_monitor_worker.start()
 
@@ -419,20 +419,14 @@ class MainWindow(QWidget):
         self.realtime_setup_worker.error_signal.connect(on_error)
         self.realtime_setup_worker.start()
 
-    def _on_blink_start(self):
-        """Callback для запуска мигания при обнаружении аномалии"""
+    def _on_start_anomaly(self):
+        """Callback для запуска событий обнаружения аномалии"""
         self.controlLayout.attention_text.start()
         self.controlLayout.show_anomaly_controls(True)
         self.anomaly_active = True
 
-    def _on_blink_stop(self):
-        """Callback для остановки мигания при фиксации аномалии пользователем"""
-        self.controlLayout.attention_text.stop()
-        self.controlLayout.show_anomaly_controls(False)
-        self.anomaly_active = False
-        
     def fix_anomaly(self):
-        """Callback для фиксации аномалии пользователем"""
+        """Callback для фиксации событий обнаружения аномалии пользователем"""
         self.controlLayout.attention_text.stop()
         self.controlLayout.show_anomaly_controls(False)
         self.anomaly_active = False
@@ -446,22 +440,12 @@ class MainWindow(QWidget):
         self.last_anomalies = anomalies
         self.update_graph_view()
 
-    def _on_output_signal(self, text):
+    def _on_output_anomaly(self, text):
         """Callback для логирования аномального события"""
         log_anomaly(_ui_log, text.rstrip())
 
     def on_progress_update(self, data):
-        """Callback для обновления прогресса в режиме файла с данными из data, который содержит ключи graph_update, anomaly_msg, step_msg, error_msg, debug_msg, anomaly_detected"""
-        if "graph_update" in data:
-            self.last_time_arr = data["time_arr"]
-            self.last_real = data["real"]
-            self.last_pred = data["pred"]
-            self.last_anomalies = data["anomalies"]
-            self.update_graph_view()
-
-        if "anomaly_msg" in data:
-            log_anomaly(_ui_log, data["anomaly_msg"].rstrip())
-
+        """Callback для логирования прогресса в режиме файла с данными из data, который содержит ключи step_msg, error_msg, debug_msg"""
         if "step_msg" in data:
             _ui_log.info(data["step_msg"])
             
@@ -470,11 +454,6 @@ class MainWindow(QWidget):
             
         if "debug_msg" in data:
             _ui_log.debug(data["debug_msg"])
-
-        if "anomaly_detected" in data and data["anomaly_detected"]:
-            self.controlLayout.attention_text.start()
-            self.controlLayout.show_anomaly_controls(True)
-            self.anomaly_active = True
             
     def on_imitate_finished(self):
         """Callback при завершении работы встроенной имитации"""
