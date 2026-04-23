@@ -305,15 +305,10 @@ class MainWindow(QWidget):
         self.stop_requested = False
 
         if self.controlLayout.realtime_mode.isChecked():
-            if self.file_mode_worker and self.file_mode_worker.isRunning():
-                self.stop_requested = True
-
             self.serviceLayout.data_file_label.setVisible(False)
             self.serviceLayout.load_data_button.setVisible(False)
             self.start_realtime_monitoring(anomaly_mode, percent)
         else:
-            self.stop_requested = True
-
             self.serviceLayout.data_file_label.setVisible(True)
             self.serviceLayout.load_data_button.setVisible(True)
             self.start_file_mode(start_index, end_index, extra_num, anomaly_mode, percent, use_filter)
