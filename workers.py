@@ -270,9 +270,9 @@ class RealTimeMonitorWorker(QThread):
         self.use_filter_checkbox = None
         self.stop_requested = None
 
-        self.realtime_real_buffer = []
-        self.realtime_pred_buffer = []
-        self.realtime_anomaly_indices = set()
+        self.real_output_denorm = []
+        self.prediction = []
+        self.report_session = AnomalyReportSession()
 
     def _is_filter_enabled(self):
         """Проверяет текущее состояние фильтрации"""
@@ -308,9 +308,8 @@ class RealTimeMonitorWorker(QThread):
                             scaler=seq_scaler
                         )
                         
-                        self.realtime_real_buffer = list(values[-self.input_length:])
-                        self.realtime_pred_buffer = list(pred)
-                        self.realtime_anomaly_indices = set()
+                        self.real_output_denorm = list(values[-self.input_length:])
+                        self.prediction = list(pred)
                         last_len = len(values)
                 
                 elif mode == "step":
@@ -318,10 +317,10 @@ class RealTimeMonitorWorker(QThread):
                     num_new_values = len(values) - last_len
                     for i in range(num_new_values):
                         new_real_value = values[last_len + i]
-                        self.realtime_real_buffer.append(new_real_value)
+                        self.real_output_denorm.append(new_real_value)
 
-                        if len(self.realtime_real_buffer) >= self.input_length:
-                            real_seq = np.array(self.realtime_real_buffer[-self.input_length:])
+                        if len(self.real_output_denorm) >= self.input_length:
+                            real_seq = np.array(self.real_output_denorm[-self.input_length:])
                             
                             # Применяем фильтрацию, если нужно
                             if self._is_filter_enabled():
@@ -336,78 +335,64 @@ class RealTimeMonitorWorker(QThread):
                                 normalize_sequence=True,
                                 scaler=seq_scaler
                             )
-                            self.realtime_pred_buffer.append(pred[-1])
+                            self.prediction.append(pred[-1])
                     
                     last_len = len(values)
 
                 # Отправляем обновления в UI
-                num_real = len(self.realtime_real_buffer)
-                num_pred = len(self.realtime_pred_buffer)
+                num_real = len(self.real_output_denorm)
+                num_pred = len(self.prediction)
                 num_new_real = num_real - self.input_length
                 total_len = self.input_length + max(num_new_real, num_pred)
 
                 time_arr = list(range(total_len))
 
-                real_full = list(self.realtime_real_buffer[: self.input_length])
+                real_output_denorm = list(self.real_output_denorm[: self.input_length])
                 if num_new_real > 0:
-                    real_full.extend(self.realtime_real_buffer[self.input_length :])
-                if len(real_full) < total_len:
-                    real_full.extend([np.nan] * (total_len - len(real_full)))
+                    real_output_denorm.extend(self.real_output_denorm[self.input_length :])
+                if len(real_output_denorm) < total_len:
+                    real_output_denorm.extend([np.nan] * (total_len - len(real_output_denorm)))
 
-                pred_full = [np.nan] * self.input_length
-                pred_full.extend(list(self.realtime_pred_buffer))
-                if len(pred_full) < total_len:
-                    pred_full.extend([np.nan] * (total_len - len(pred_full)))
+                prediction = [np.nan] * self.input_length
+                prediction.extend(list(self.prediction))
+                if len(prediction) < total_len:
+                    prediction.extend([np.nan] * (total_len - len(prediction)))
 
-                min_len = min(len(real_full), len(pred_full), len(time_arr))
-                real_full = real_full[:min_len]
-                pred_full = pred_full[:min_len]
+                min_len = min(len(real_output_denorm), len(prediction), len(time_arr))
+                real_output_denorm = real_output_denorm[:min_len]
+                prediction = prediction[:min_len]
                 time_arr = time_arr[:min_len]
 
-                anomaly_indices_full = []
                 check_start = self.input_length
-                check_end = min(num_real, self.input_length + num_pred)
+                check_end = len(real_output_denorm)
 
-                if check_end > check_start:
-                    real_for_check = []
-                    pred_for_check = []
-                    indices_for_check = []
+                # Сбор валидных пар (индекс, реальное значение, предсказанное значение)
+                valid_pairs = [
+                    (i, real_output_denorm[i], prediction[i])
+                    for i in range(check_start, check_end)
+                    if not np.isnan(real_output_denorm[i]) and not np.isnan(prediction[i])
+                ]
 
-                    for i in range(check_start, check_end):
-                        pred_idx = i - self.input_length
-                        if pred_idx < len(self.realtime_pred_buffer):
-                            real_val = self.realtime_real_buffer[i]
-                            pred_val = self.realtime_pred_buffer[pred_idx]
-                            if real_val != 0 and not np.isnan(real_val) and not np.isnan(pred_val):
-                                real_for_check.append(real_val)
-                                pred_for_check.append(pred_val)
-                                indices_for_check.append(i)
+                anomaly_indices = []
+                if valid_pairs:
+                    indices, real_vals, pred_vals = zip(*valid_pairs)
+                    detected_indices = self.anomaly_module.detect(list(real_vals), list(pred_vals))
+                    anomaly_indices = [indices[idx] for idx in detected_indices if idx < len(indices)]
 
-                    if real_for_check and pred_for_check:
-                        detected_indices = self.anomaly_module.detect(real_for_check, pred_for_check)
+                new_anomalies = self.report_session.new_indices(anomaly_indices)
+                if new_anomalies:
+                    for idx in new_anomalies:
+                        msg = AnomalyFormatter.format_anomaly_message(
+                            [idx],
+                            [real_output_denorm[idx]],
+                            [prediction[idx]],
+                            title=f"Аномалия в точке {idx}",
+                        )
+                        if msg:
+                            self.output_anomaly_signal.emit(msg)
+                            self.start_anomaly_signal.emit()
 
-                        for detected_idx in detected_indices:
-                            if detected_idx < len(indices_for_check):
-                                anomaly_idx = indices_for_check[detected_idx]
-                                if anomaly_idx not in self.realtime_anomaly_indices:
-                                    anomaly_indices_full.append(anomaly_idx)
-                                    self.realtime_anomaly_indices.add(anomaly_idx)
-
-                                    anomaly_msg = AnomalyFormatter.format_anomaly_message(
-                                        [anomaly_idx],
-                                        [real_for_check[detected_idx]],
-                                        [pred_for_check[detected_idx]],
-                                        title=f"Аномалия в точке {anomaly_idx}",
-                                    )
-                                    if anomaly_msg:
-                                        self.output_anomaly_signal.emit(anomaly_msg)
-                                        self.start_anomaly_signal.emit()
-
-                for idx in self.realtime_anomaly_indices:
-                    if idx < len(time_arr) and idx not in anomaly_indices_full:
-                        anomaly_indices_full.append(idx)
-
-                self.graph_update_signal.emit(time_arr, real_full, pred_full, anomaly_indices_full)
+                self.graph_update_signal.emit(time_arr, real_output_denorm, prediction, anomaly_indices)
 
             monitor_data(
                 self.monitor_file,
