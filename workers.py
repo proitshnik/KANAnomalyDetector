@@ -13,9 +13,8 @@ _worker_log = get_logger("workers")
 
 
 class FileModeWorker(QThread):
-    """Worker для обработки данных из файла - выполняет предсказания, обнаруживает аномалии и отправляет обновления в UI через сигналы graph_update_signal, progress_signal и finished_signal. Реализует логику обработки данных в заданном диапазоне с учетом дополнительных точек, а также буферизацию для отображения на графике и предотвращения повторного обнаружения одних и тех же аномалий"""
+    """Worker для обработки данных из файла - выполняет предсказания, обнаруживает аномалии и отправляет обновления в UI через сигналы graph_update_signal и finished_signal. Реализует логику обработки данных в заданном диапазоне с учетом дополнительных точек, а также буферизацию для отображения на графике и предотвращения повторного обнаружения одних и тех же аномалий"""
     graph_update_signal = pyqtSignal(list, list, list, list)
-    progress_signal = pyqtSignal(dict)
     output_anomaly_signal = pyqtSignal(str)
     start_anomaly_signal = pyqtSignal()
     finished_signal = pyqtSignal()
@@ -55,7 +54,7 @@ class FileModeWorker(QThread):
                     f"Некорректный диапазон! Допустимо: start_index >= {min_index}, "
                     f"end_index <= {max_index}, start_index <= end_index."
                 )
-                self.progress_signal.emit({"step_msg": msg})
+                _worker_log.info(msg)
                 self.finished_signal.emit()
                 return
 
@@ -69,8 +68,8 @@ class FileModeWorker(QThread):
             right_range = min(predictor.len_X_test, seq_end + extra_seq_right + 1)
             wanted_dot_num = right_range - left_range
 
-            self.progress_signal.emit({"step_msg": f"Диапазон: start_index={start_index}, end_index={end_index}, extra_num={extra_num}"})
-            self.progress_signal.emit({"step_msg": f"Возможные индексы: {min_index} ... {max_index}"})
+            _worker_log.info(f"Диапазон: start_index={start_index}, end_index={end_index}, extra_num={extra_num}")
+            _worker_log.info(f"Возможные индексы: {min_index} ... {max_index}")
 
             prediction = []
             real_output_denorm = []
@@ -119,14 +118,12 @@ class FileModeWorker(QThread):
                     self.output_anomaly_signal.emit(msg)
                     self.start_anomaly_signal.emit()
 
-            self.progress_signal.emit(
-                {"step_msg": f"Step {1}/{right_range-left_range}: {prediction[-1]}, {real_output_denorm[-1]}"}
-            )
+            _worker_log.info(f"Step {1}/{right_range-left_range}: {prediction[-1]}, {real_output_denorm[-1]}")
 
             # Остальные шаги
             for i in range(left_range + 1, right_range):
                 if self.stop_requested and self.stop_requested():
-                    self.progress_signal.emit({"step_msg": "Работа остановлена пользователем"})
+                    _worker_log.info("Работа остановлена пользователем")
                     break
 
                 input_data_for_prediction, scaler_idfp = predictor.X_test[i], predictor.X_test_scaler[i]
@@ -174,11 +171,7 @@ class FileModeWorker(QThread):
                     anomaly_indices,
                 )
 
-                self.progress_signal.emit(
-                    {
-                        "step_msg": f"Step {i-left_range+1}/{right_range-left_range}: {prediction[-1]}, {real_output_denorm[-1]}"
-                    }
-                )
+                _worker_log.info(f"Step {i-left_range+1}/{right_range-left_range}: {prediction[-1]}, {real_output_denorm[-1]}")
 
                 if len(prediction) >= wanted_dot_num and len(real_output_denorm) >= wanted_dot_num:
                     break
@@ -203,15 +196,13 @@ class FileModeWorker(QThread):
                     title="Итоговый отчет по аномалиям",
                 )
                 if msg:
-                    self.progress_signal.emit({"anomaly_msg": msg})
+                    self.output_anomaly_signal.emit(msg)
 
-            self.progress_signal.emit(
-                {
-                    "debug_msg": f"Готово! Первые десять предсказаний: {safe_pick(prediction, [*range(10)])}\nРеальные: {safe_pick(real_output_denorm, [*range(10)])}"
-                }
+            _worker_log.debug(
+                f"Готово! Первые десять предсказаний: {safe_pick(prediction, [*range(10)])}\nРеальные: {safe_pick(real_output_denorm, [*range(10)])}"
             )
         except Exception as e:
-            self.progress_signal.emit({"error_msg": f"Ошибка: {str(e)}"})
+            _worker_log.error(f"Ошибка: {str(e)}")
         finally:
             self.finished_signal.emit()
 

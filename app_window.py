@@ -343,7 +343,6 @@ class MainWindow(QWidget):
             )
             self.file_mode_worker.stop_requested = lambda: self.stop_requested
             self.file_mode_worker.graph_update_signal.connect(self._on_graph_update_signal)
-            self.file_mode_worker.progress_signal.connect(self.on_progress_update)
             self.file_mode_worker.output_anomaly_signal.connect(self._on_output_anomaly)
             self.file_mode_worker.start_anomaly_signal.connect(self._on_start_anomaly)
             self.file_mode_worker.finished_signal.connect(self.on_file_mode_finished)
@@ -445,9 +444,12 @@ class MainWindow(QWidget):
         log_anomaly(_ui_log, text.rstrip())
 
     def on_progress_update(self, data):
-        """Callback для логирования прогресса в режиме файла с данными из data, который содержит ключи step_msg, error_msg, debug_msg"""
-        if "step_msg" in data:
-            _ui_log.info(data["step_msg"])
+        """Callback для логирования прогресса от UI с данными из data, который содержит ключи info_msg, warning_msg, error_msg, debug_msg. Не используется."""
+        if "info_msg" in data:
+            _ui_log.info(data["info_msg"])
+            
+        if "warning_msg" in data:
+            _ui_log.warning(data["warning_msg"])
             
         if "error_msg" in data:
             _ui_log.error(data["error_msg"])
