@@ -1,7 +1,7 @@
 import datetime
 
 from PyQt6.QtCore import pyqtSignal
-from PyQt6.QtWidgets import QApplication, QBoxLayout, QHBoxLayout, QPushButton, QVBoxLayout, QWidget
+from PyQt6.QtWidgets import QBoxLayout, QHBoxLayout, QVBoxLayout, QWidget
 
 from anomaly_factory import AnomalyDetectorFactory
 from app_logging import get_logger, log_anomaly
@@ -179,7 +179,6 @@ class MainWindow(QWidget):
                 right = len(self.last_time_arr)
                 left = max(0, right - 16)
                 vb.setXRange(left, right, padding=0)
-            QApplication.processEvents()
 
     def _has_active_threads(self):
         """Проверяет, есть ли активные потоки"""
