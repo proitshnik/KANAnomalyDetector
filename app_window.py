@@ -90,7 +90,7 @@ class MainWindow(QWidget):
         self.controlLayout.realtime_mode.stateChanged.connect(self.on_mode_changed)
 
         # callbacks для обновления путей и переключения имитации
-        self.imitMonPathsLayout.paths_changed.connect(self.on_monitoring_paths_changed)
+        self.imitMonPathsLayout.paths_changed.connect(self.on_paths_chanded)
         self.imitMonPathsLayout.imitation_toggled.connect(self.on_imitation_toggled)
         
         # Изначально скрываем layout мониторинга, так как по умолчанию выбран файловый режим
@@ -154,10 +154,10 @@ class MainWindow(QWidget):
         """Скрыть виджет ImitMonPathsLayout для путей файлов мониторинга и источника имитации полностью"""
         self.imitMonPathsWidget.hide()
 
-    def on_monitoring_paths_changed(self, monitor_path, source_path):
+    def on_paths_chanded(self, monitor_path, source_path):
         """Callback для обновления путей при их изменении в интерфейсе"""
         imit_mon_path.set_paths(monitor_path, source_path)
-        _ui_log.info(f"Пути мониторинга обновлены - Monitor: {monitor_path}, Source: {source_path}")
+        _ui_log.info(f"Пути обновлены. Мониторинг: {monitor_path}, Источник имитации: {source_path}")
 
     def on_imitation_toggled(self, enabled):
         """Callback для переключения имитации"""
