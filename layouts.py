@@ -38,21 +38,19 @@ class GraphLayout(QBoxLayout):
         self.real_pen = pg.mkPen(color=(0, 0, 255), width=2)
         self.predicted_pen = pg.mkPen(color=(255, 0, 0), width=2)
 
-    def plot_real(self, time=None, monitor=None):
-        if time is None:
+    def plot_real(self, time=None, monitor=None, test_mode=False):
+        if test_mode:
             # Example graph data for testing
             time = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-        if monitor is None:
             # Example graph data for testing
             monitor = [100.519, 101.018, 99.087, 99.345, 100.814, 99.915, 99.608, 100.202, 100.029, 98.572]
 
         self.plot_comparison.plot(time, monitor, name="Real monitor data", pen=self.real_pen)
 
-    def plot_predicted(self, time=None, monitor=None):
-        if time is None:
+    def plot_predicted(self, time=None, monitor=None, test_mode=False):
+        if test_mode:
             # Example graph data for testing
             time = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-        if monitor is None:
             # Example graph data for testing
             monitor = [101.519, 102.018, 100.087, 100.345, 101.814, 100.915, 100.608, 101.202, 101.029, 99.572]
 
@@ -76,8 +74,8 @@ class GraphLayout(QBoxLayout):
         
         if self._real_item is None or self._predicted_item is None:
             # Первый раз
-            self._real_item = self.plot_comparison.plot(time, real, name="Real monitor data", pen=self.real_pen)
-            self._predicted_item = self.plot_comparison.plot(time, predicted, name="Predicted KAN data", pen=self.predicted_pen)
+            self._real_item = self.plot_real(time, real)
+            self._predicted_item = self.plot_predicted(time, predicted)
         else:
             # Обновляем
             self._real_item.setData(time, real)
