@@ -213,13 +213,13 @@ class KANAnomalyDetector:
     deviation_l1 = torch.norm(predictions - test_label, p=1).item()
     deviation_l2 = torch.norm(predictions - test_label, p=2).item()
     
-    _log.debug("MSE (Mean Squared Error) (Нормализованные): %f", mse)
-    _log.debug("MAE (Mean Absolute Error) (Нормализованные): %f", mae)
-    _log.debug("RMSE (Root Mean Squared Error) (Нормализованные): %f", rmse)
+    _log.debug("MSE (Mean Squared Error) (Нормализованные): %.3f", mse)
+    _log.debug("MAE (Mean Absolute Error) (Нормализованные): %.3f", mae)
+    _log.debug("RMSE (Root Mean Squared Error) (Нормализованные): %.3f", rmse)
     _log.debug("MAPE (Mean Absolute Percentage Error) (Нормализованные): %.2f%%", mape)
-    _log.debug("MASE (Mean Absolute Scaled Error) (Нормализованные): %f", mase)
-    _log.debug("Deviation L1 (Sum of Absolute Errors) (Нормализованные): %f", deviation_l1)
-    _log.debug("Deviation L2 (Euclidean Norm) (Нормализованные): %f", deviation_l2)
+    _log.debug("MASE (Mean Absolute Scaled Error) (Нормализованные): %.3f", mase)
+    _log.debug("Deviation L1 (Sum of Absolute Errors) (Нормализованные): %.3f", deviation_l1)
+    _log.debug("Deviation L2 (Euclidean Norm) (Нормализованные): %.3f", deviation_l2)
 
     if not normalize_sequence:
       preds_original = self.denormalize_data(predictions.detach().numpy())
