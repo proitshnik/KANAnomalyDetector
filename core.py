@@ -198,15 +198,28 @@ class KANAnomalyDetector:
     if self.X_test_tensor is None or self.y_test_tensor is None:
       raise ValueError("Тестовые данные не подготовлены")
 
-    # оценка работы модели по среднеквадратичной ошибке, отклонению L2-нормы, L1-норме
+    # оценка работы модели по множеству метрик
     test_input = self.X_test_tensor
     test_label = self.y_test_tensor
 
     predictions = self.model(test_input)
 
+    # Нормализованные метрики
     mse = torch.mean((predictions - test_label) ** 2).item()
-    deviation_l2 = torch.norm(predictions - test_label, p=2).item()
+    mae = torch.mean(torch.abs(predictions - test_label)).item()
+    rmse = torch.sqrt(torch.tensor(mse)).item()
+    mape = self.calculate_mape(test_label.detach().numpy(), predictions.detach().numpy())
+    mase = self.calculate_mase(test_label.detach().numpy(), predictions.detach().numpy())
     deviation_l1 = torch.norm(predictions - test_label, p=1).item()
+    deviation_l2 = torch.norm(predictions - test_label, p=2).item()
+    
+    _log.debug("MSE (Mean Squared Error) (Нормализованные): %f", mse)
+    _log.debug("MAE (Mean Absolute Error) (Нормализованные): %f", mae)
+    _log.debug("RMSE (Root Mean Squared Error) (Нормализованные): %f", rmse)
+    _log.debug("MAPE (Mean Absolute Percentage Error) (Нормализованные): %.2f%%", mape)
+    _log.debug("MASE (Mean Absolute Scaled Error) (Нормализованные): %f", mase)
+    _log.debug("Deviation L1 (Sum of Absolute Errors) (Нормализованные): %f", deviation_l1)
+    _log.debug("Deviation L2 (Euclidean Norm) (Нормализованные): %f", deviation_l2)
 
     if not normalize_sequence:
       preds_original = self.denormalize_data(predictions.detach().numpy())
@@ -215,16 +228,32 @@ class KANAnomalyDetector:
       _log.debug("Infs in preds_original: %s", np.isinf(preds_original).sum())
       _log.debug("NaNs in labels_original: %s", np.isnan(labels_original).sum())
       _log.debug("Infs in labels_original: %s", np.isinf(labels_original).sum())
+      
       # Преобразуем обратно в тензоры
       preds_tensor = torch.tensor(preds_original, dtype=torch.float32)
       labels_tensor = torch.tensor(labels_original, dtype=torch.float32)
-      # Считаем ошибки
+      
+      # Считаем все метрики на денормализованных данных
       mseo = torch.mean((preds_tensor - labels_tensor) ** 2).item()
-      deviation_l2o = torch.norm(preds_tensor - labels_tensor, p=2).item()
+      maeo = torch.mean(torch.abs(preds_tensor - labels_tensor)).item()
+      rmseo = torch.sqrt(torch.tensor(mseo)).item()
+      mapeo = self.calculate_mape(labels_original, preds_original)
+      maseo = self.calculate_mase(labels_original, preds_original)
       deviation_l1o = torch.norm(preds_tensor - labels_tensor, p=1).item()
-      _log.info("Среднеквадратичная ошибка на тестовых данных (original): %s", mseo)
-      _log.info("Отклонение по L2-норме на тестовых данных (original): %s", deviation_l2o)
-      _log.info("Отклонение по L1-норме на тестовых данных (original): %s", deviation_l1o)
+      deviation_l2o = torch.norm(preds_tensor - labels_tensor, p=2).item()
+      
+      _log.info("MSE (Mean Squared Error) (Денормализованные, не срезовая): %.3f", mseo)
+      _log.info("MAE (Mean Absolute Error) (Денормализованные, не срезовая): %.3f", maeo)
+      _log.info("RMSE (Root Mean Squared Error) (Денормализованные, не срезовая): %.3f", rmseo)
+      _log.info("MAPE (Mean Absolute Percentage Error) (Денормализованные, не срезовая): %.2f%%", mapeo)
+      _log.info("MASE (Mean Absolute Scaled Error) (Денормализованные, не срезовая): %.3f", maseo)
+      _log.info("Deviation L1 (Sum of Absolute Errors) (Денормализованные, не срезовая): %.3f", deviation_l1o)
+      _log.info("Deviation L2 (Euclidean Norm) (Денормализованные, не срезовая): %.3f", deviation_l2o)
+      
+      return {
+        "mse": mseo, "mae": maeo, "rmse": rmseo, "mape": mapeo, "mase": maseo,
+        "deviation_l1": deviation_l1o, "deviation_l2": deviation_l2o
+      }
     else:
       # Денормализация для normalize_sequence=True - каждая последовательность имеет свой scaler
       preds_np = predictions.detach().numpy()
@@ -238,20 +267,33 @@ class KANAnomalyDetector:
         preds_original.append(pred_denorm)
         labels_original.append(label_denorm)
       
-      preds_original = np.array(preds_original)
-      labels_original = np.array(labels_original)
+      preds_original = np.array(preds_original).flatten()
+      labels_original = np.array(labels_original).flatten()
       
-      # Преобразуем в тензоры и считаем ошибки
+      # Преобразуем в тензоры и считаем все метрики
       preds_tensor = torch.tensor(preds_original, dtype=torch.float32)
       labels_tensor = torch.tensor(labels_original, dtype=torch.float32)
+      
       mseo = torch.mean((preds_tensor - labels_tensor) ** 2).item()
-      deviation_l2o = torch.norm(preds_tensor - labels_tensor, p=2).item()
+      maeo = torch.mean(torch.abs(preds_tensor - labels_tensor)).item()
+      rmseo = torch.sqrt(torch.tensor(mseo)).item()
+      mapeo = self.calculate_mape(labels_original, preds_original)
+      maseo = self.calculate_mase(labels_original, preds_original)
       deviation_l1o = torch.norm(preds_tensor - labels_tensor, p=1).item()
-      _log.info("Среднеквадратичная ошибка на тестовых данных (denormalized, normalize_sequence): %s", mseo)
-      _log.info("Отклонение по L2-норме на тестовых данных (denormalized, normalize_sequence): %s", deviation_l2o)
-      _log.info("Отклонение по L1-норме на тестовых данных (denormalized, normalize_sequence): %s", deviation_l1o)
-
-    return mse, deviation_l2, deviation_l1
+      deviation_l2o = torch.norm(preds_tensor - labels_tensor, p=2).item()
+      
+      _log.info("MSE (Mean Squared Error) (Денормализованные, срезовая): %.3f", mseo)
+      _log.info("MAE (Mean Absolute Error) (Денормализованные, срезовая): %.3f", maeo)
+      _log.info("RMSE (Root Mean Squared Error) (Денормализованные, срезовая): %.3f", rmseo)
+      _log.info("MAPE (Mean Absolute Percentage Error) (Денормализованные, срезовая): %.2f%%", mapeo)
+      _log.info("MASE (Mean Absolute Scaled Error) (Денормализованные, срезовая): %.3f", maseo)
+      _log.info("Deviation L1 (Sum of Absolute Errors) (Денормализованные, срезовая): %.3f", deviation_l1o)
+      _log.info("Deviation L2 (Euclidean Norm) (Денормализованные, срезовая): %.3f", deviation_l2o)
+      
+      return {
+        "mse": mseo, "mae": maeo, "rmse": rmseo, "mape": mapeo, "mase": maseo,
+        "deviation_l1": deviation_l1o, "deviation_l2": deviation_l2o
+      }
 
   def predict(self, input_data, denormalize=True, normalize_sequence=True, scaler=None):
     if self.model is None:
@@ -328,6 +370,7 @@ class KANAnomalyDetector:
       with open('real_data.txt', 'w') as f:
         for value in real_data:
             f.write(f"{value}\n")
+      _log.debug("Реальные данные сохранены в real_data.txt")
 
     plt.plot(range(len_data), predicted_data, label="Предсказанные значения", color="red", marker="x")
 
@@ -335,6 +378,7 @@ class KANAnomalyDetector:
       with open('predicted_data.txt', 'w') as f:
         for value in predicted_data:
             f.write(f"{value}\n")
+      _log.debug("Предсказанные данные сохранены в predicted_data.txt")
 
     plt.title("Сравнение реальных и предсказанных значений")
     plt.xlabel("Индекс значения")
@@ -366,6 +410,7 @@ class KANAnomalyDetector:
       with open('real_data.txt', 'w') as f:
         for value in real_data:
             f.write(f"{value}\n")
+      _log.debug("Реальные данные сохранены в real_data.txt")
 
     fig.add_trace(go.Scatter(
         x=list(range(len_data)),
@@ -379,6 +424,7 @@ class KANAnomalyDetector:
       with open('predicted_data.txt', 'w') as f:
         for value in predicted_data:
             f.write(f"{value}\n")
+      _log.debug("Предсказанные данные сохранены в predicted_data.txt")
 
     fig.update_layout(
         title="Сравнение реальных и предсказанных значений",
@@ -427,3 +473,51 @@ class KANAnomalyDetector:
       _log.info(f"Фильтрация исходных данных ({len(self.raw_data)} точек)...")
       self.raw_data = np.array(filter_data(self.raw_data.tolist(), wavelet="db3", alpha=0.05, J=5, threshold_type="hard"))
       _log.debug(f"Фильтрация применена к исходным данным")
+
+  # Метрики регрессии для оценки качества предсказания модели
+  def calculate_mse(self, real, predicted):
+    """Среднеквадратичная ошибка (MSE, Mean Squared Error)"""
+    return np.mean((predicted - real) ** 2)
+
+  def calculate_deviation_l1(self, real, predicted):
+    """Отклонение по L1-норме (сумма абсолютных ошибок)"""
+    return np.sum(np.abs(predicted - real))
+
+  def calculate_deviation_l2(self, real, predicted):
+    """Отклонение по L2-норме (евклидова норма)"""
+    return np.sqrt(np.sum((predicted - real) ** 2))
+
+  def calculate_mae(self, real, predicted):
+    """Средняя абсолютная ошибка (MAE, Mean Absolute Error)"""
+    return np.mean(np.abs(predicted - real))
+
+  def calculate_rmse(self, real, predicted):
+    """Корневая среднеквадратичная ошибка (RMSE, Root Mean Squared Error)"""
+    return np.sqrt(self.calculate_mse(real, predicted))
+
+  def calculate_mape(self, real, predicted):
+    """Средняя абсолютная процентная ошибка (MAPE, Mean Absolute Percentage Error)"""
+    mask = real != 0
+    if np.sum(mask) == 0:
+      return 0.0 if np.allclose(predicted, 0) else float("inf")
+    
+    ape = np.abs((real[mask] - predicted[mask]) / real[mask])
+    return np.mean(ape) * 100
+
+  def calculate_mase(self, real, predicted):
+    """
+    Средняя абсолютная масштабированная ошибка (MASE, Mean Absolute Scaled Error)
+    Масштабируется по сравнению с наивным прогнозом (предыдущее значение)
+    """
+    n = len(real)
+    if n < 2:
+      return 0.0
+    
+    # Используем предыдущее значение
+    naive_forecast = np.concatenate(([real[0]], real[:-1]))
+    denominator = np.mean(np.abs(real - naive_forecast))
+    
+    if denominator == 0:
+      return 0.0 if np.allclose(real, predicted) else float("inf")
+    
+    return np.mean(np.abs(real - predicted)) / denominator
