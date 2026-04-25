@@ -2,6 +2,24 @@
 Приложение Anomaly Detector с GUI.
 Точка входа.
 """
+# ===============================
+# Fix for WinError 1114 with _load_dll_libraries c10.dll
+# ===============================
+import os
+import platform
+import ctypes
+from importlib.util import find_spec
+
+if platform.system() == "Windows":
+    try:
+        spec = find_spec("torch")
+        if spec and spec.origin:
+            dll_path = os.path.join(os.path.dirname(spec.origin), "lib", "c10.dll")
+            if os.path.exists(dll_path):
+                ctypes.CDLL(os.path.normpath(dll_path))
+    except Exception:
+        pass
+# ===============================
 
 import sys
 from pathlib import Path
