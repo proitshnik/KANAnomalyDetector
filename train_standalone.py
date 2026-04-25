@@ -153,11 +153,16 @@ if __name__ == "__main__":
     # ===============================
     
     _log.info("Оценка на тестовых данных...")
-    mse, deviation_l2, deviation_l1 = predictor.evaluate(normalize_sequence=normalize_sequence)
+    metrics = predictor.evaluate(normalize_sequence=normalize_sequence)
     
-    _log.info("Среднеквадратичная ошибка: %f", mse)
-    _log.info("Отклонение по L2-норме: %f", deviation_l2)
-    _log.info("Отклонение по L1-норме: %f", deviation_l1)
+    _log.info("Метрики:")
+    _log.info("MSE: %.3f", metrics["mse"])
+    _log.info("MAE: %.3f", metrics["mae"])
+    _log.info("RMSE: %.3f", metrics["rmse"])
+    _log.info("MAPE: %.2f%%", metrics["mape"])
+    _log.info("MASE: %.3f", metrics["mase"])
+    _log.info("Deviation L1: %.3f", metrics["deviation_l1"])
+    _log.info("Deviation L2: %.3f", metrics["deviation_l2"])
     
     # ===============================
     # СРАВНЕНИЕ ПРЕДСКАЗАНИЙ И РЕАЛЬНЫХ ЗНАЧЕНИЙ
