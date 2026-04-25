@@ -47,7 +47,7 @@ def main():
     shell.resize(window.minimumSize())
 
     attach_gui_log_handler(window.log_gui_message.emit)
-    logger.info("Запуск приложения (до main): Anomaly Detector %s", PROGRAM_VERSION)
+    logger.info("Запуск приложения: Anomaly Detector %s", PROGRAM_VERSION)
 
     shell.show()
     sys.exit(app.exec())
