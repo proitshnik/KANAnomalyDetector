@@ -10,6 +10,9 @@ from app_logging import get_logger, configure_standalone_logging
 from core import KANAnomalyDetector
 from monitoring import monitor_data
 from filter import filter_data
+from anomaly_factory import AnomalyDetectorFactory
+from anomaly_formatting import AnomalyFormatter
+from anomaly_reporting import AnomalyReportSession
 
 import numpy as np
 
@@ -98,6 +101,9 @@ if __name__ == "__main__":
     # Параметры мониторинга
     interval_sec = 1
     
+    # Обнаружение аномалий
+    anomaly_detection = True
+    
     # ===============================
     # ИНИЦИАЛИЗАЦИЯ И ЗАГРУЗКА МОДЕЛИ
     # ===============================
@@ -138,25 +144,42 @@ if __name__ == "__main__":
     _log.info("Загрузка модели из: %s", model_path)
     predictor.load_model(model_path)
     
+    # ===============================
+    # ИНИЦИАЛИЗАЦИЯ МОДУЛЯ ОБНАРУЖЕНИЯ АНОМАЛИЙ
+    # ===============================
+    anomaly_module = None
+    if anomaly_detection:
+        try:
+            anomaly_module = AnomalyDetectorFactory.create(mode="Процент отклонения", threshold_percent=1)
+            _log.info("Модуль обнаружения аномалий инициализирован")
+        except Exception as e:
+            _log.warning("Не удалось инициализировать модуль обнаружения аномалий: %s", str(e))
+            anomaly_module = None
+    
     # остаток кода файлового режима для проверки данных из файла на метрики
     if data_path:
         _log.info("Оценка на тестовых данных...")
-        mse, deviation_l2, deviation_l1 = predictor.evaluate()
-        _log.info("Среднеквадратичная ошибка: %f", mse)
-        _log.info("Отклонение по L2-норме: %f", deviation_l2)
-        _log.info("Отклонение по L1-норме: %f", deviation_l1)
+        metrics = predictor.evaluate(normalize_sequence=normalize_sequence)
+        _log.info("Метрики полученные:")
+        _log.info("MSE: %.3f", metrics["mse"])
+        _log.info("MAE: %.3f", metrics["mae"])
+        _log.info("RMSE: %.3f", metrics["rmse"])
+        _log.info("MAPE: %.2f%%", metrics["mape"])
+        _log.info("MASE: %.3f", metrics["mase"])
+        _log.info("Deviation L1: %.3f", metrics["deviation_l1"])
+        _log.info("Deviation L2: %.3f", metrics["deviation_l2"])
     
     # ===============================
-    # МОНТОРИНГ В РЕАЛЬНОМ ВРЕМЕНИ
+    # МОНИТОРИНГ В РЕАЛЬНОМ ВРЕМЕНИ
     # ===============================
-    
     _log.info("Начало мониторинга файла: %s", monitor_file)
     
     # Переменные состояния
     state = {
-        'realtime_real_buffer': [],
-        'realtime_pred_buffer': [],
-        'last_len': 0
+        "real_output_denorm": [],
+        "prediction": [],
+        "report_session": AnomalyReportSession(),
+        "last_len": 0
     }
     
     def monitor_callback(values, mode):
@@ -167,11 +190,11 @@ if __name__ == "__main__":
                 
                 # Применяем фильтрацию, если нужно
                 if use_filter:
-                    _log.info("Фильтрация: ВКЛЮЧЕНА")
+                    _log.debug("Фильтрация: ВКЛЮЧЕНА")
                     real_seq = filter_data(real_seq.tolist(), wavelet="db3", alpha=0.05, J=5, threshold_type="hard")
                     real_seq = np.array(real_seq)
                 else:
-                    _log.info("Фильтрация: ОТКЛЮЧЕНА")
+                    _log.debug("Фильтрация: ОТКЛЮЧЕНА")
                 
                 norm_seq, seq_scaler = predictor.normalize_sequence(real_seq)
                 pred = predictor.predict(
@@ -181,24 +204,19 @@ if __name__ == "__main__":
                     scaler=seq_scaler
                 )
                 
-                state['realtime_real_buffer'] = list(values[-input_length:])
-                state['realtime_pred_buffer'] = list(pred)
-                state['last_len'] = len(values)
-                
-                _log.info("Инициализация буферов: %d реальных точек, %d предсказаний", 
-                         len(state['realtime_real_buffer']), len(state['realtime_pred_buffer']))
+                state["real_output_denorm"] = list(values[-input_length:])
+                state["prediction"] = list(pred)
+                state["last_len"] = len(values)
         
         elif mode == "step":
             # Обрабатываем новые значения
-            num_new_values = len(values) - state['last_len']
-            
+            num_new_values = len(values) - state["last_len"]
             for i in range(num_new_values):
-                new_real_value = values[state['last_len'] + i]
-                state['realtime_real_buffer'].append(new_real_value)
-                
-                if len(state['realtime_real_buffer']) >= input_length:
-                    real_seq = np.array(state['realtime_real_buffer'][-input_length:])
-                    
+                new_real_value = values[state["last_len"] + i]
+                state["real_output_denorm"].append(new_real_value)
+
+                if len(state["real_output_denorm"]) >= input_length:
+                    real_seq = np.array(state["real_output_denorm"][-input_length:])
                     # Применяем фильтрацию, если нужно
                     if use_filter:
                         _log.debug(f"Фильтрация применена к последовательности из {len(real_seq)} точек")
@@ -207,23 +225,68 @@ if __name__ == "__main__":
                     
                     norm_seq, seq_scaler = predictor.normalize_sequence(real_seq)
                     pred = predictor.predict(
-                        norm_seq,
-                        denormalize=True,
-                        normalize_sequence=True,
+                        norm_seq, 
+                        denormalize=True, 
+                        normalize_sequence=True, 
                         scaler=seq_scaler
                     )
-                    state['realtime_pred_buffer'].append(pred[-1])
+                    state["prediction"].append(pred[-1])
             
-            state['last_len'] = len(values)
-            
-            # Вывод статистики
-            num_real = len(state['realtime_real_buffer'])
-            num_pred = len(state['realtime_pred_buffer'])
-            _log.info("Шаг: %d реальных точек, %d предсказаний", num_real, num_pred)
-            
-            if num_real > 0 and num_pred > 0:
-                _log.debug("Последняя реальная: %f, последнее предсказание: %f", 
-                          state['realtime_real_buffer'][-1], state['realtime_pred_buffer'][-1])
+            state["last_len"] = len(values)
+
+        # Построение полных массивов для анализа
+        num_real = len(state["real_output_denorm"])
+        num_pred = len(state["prediction"])
+        num_new_real = num_real - input_length
+        total_len = input_length + max(num_new_real, num_pred)
+
+        time_arr = list(range(total_len))
+        real_output_denorm_full = list(state["real_output_denorm"][: input_length])
+        if num_new_real > 0:
+            real_output_denorm_full.extend(state["real_output_denorm"][input_length:])
+        if len(real_output_denorm_full) < total_len:
+            real_output_denorm_full.extend([np.nan] * (total_len - len(real_output_denorm_full)))
+
+        prediction_full = [np.nan] * input_length
+        prediction_full.extend(list(state["prediction"]))
+        if len(prediction_full) < total_len:
+            prediction_full.extend([np.nan] * (total_len - len(prediction_full)))
+
+        min_len = min(len(real_output_denorm_full), len(prediction_full), len(time_arr))
+        real_output_denorm_full = real_output_denorm_full[:min_len]
+        prediction_full = prediction_full[:min_len]
+        time_arr = time_arr[:min_len]
+
+        # Обнаружение аномалий
+        check_start = input_length
+        check_end = len(real_output_denorm_full)
+        valid_pairs = [
+            (i, real_output_denorm_full[i], prediction_full[i])
+            for i in range(check_start, check_end)
+            if not np.isnan(real_output_denorm_full[i]) and not np.isnan(prediction_full[i])
+        ]
+
+        anomaly_indices = []
+        if anomaly_module and valid_pairs:
+            indices, real_vals, pred_vals = zip(*valid_pairs)
+            try:
+                detected_indices = anomaly_module.detect(list(real_vals), list(pred_vals))
+                anomaly_indices = [indices[idx] for idx in detected_indices if idx < len(indices)]
+            except Exception as e:
+                _log.debug("Ошибка при обнаружении аномалий: %s", str(e))
+
+        new_anomalies = state["report_session"].new_indices(anomaly_indices)
+        if new_anomalies:
+            for idx in new_anomalies:
+                try:
+                    msg = AnomalyFormatter.format_anomaly_message(
+                        [idx], [real_output_denorm_full[idx]], [prediction_full[idx]],
+                        title=f"Аномалия в точке {idx}",
+                    )
+                    if msg:
+                        _log.warning("АНОМАЛИЯ ОБНАРУЖЕНА:\n%s", msg)
+                except Exception as e:
+                    _log.debug("Ошибка при форматировании сообщения об аномалии: %s", str(e))
     
     try:
         monitor_data(
@@ -232,7 +295,7 @@ if __name__ == "__main__":
             output_length=output_length,
             interval_sec=interval_sec,
             callback=monitor_callback,
-            stop_check=None  # Можно добавить функцию проверки остановки
+            stop_check=None
         )
     except KeyboardInterrupt:
         _log.info("Мониторинг прерван пользователем")
@@ -245,40 +308,40 @@ if __name__ == "__main__":
         # ВИЗУАЛИЗАЦИЯ
         # ===============================
         
-        if len(state['realtime_real_buffer']) > 0 and len(state['realtime_pred_buffer']) > 0:
+        if len(state["real_output_denorm"]) > 0 and len(state["prediction"]) > 0:
             _log.info("Построение финального графика...")
             try:
-                num_real = len(state['realtime_real_buffer'])
-                num_pred = len(state['realtime_pred_buffer'])
+                num_real = len(state["real_output_denorm"])
+                num_pred = len(state["prediction"])
                 num_new_real = num_real - input_length
                 total_len = input_length + max(num_new_real, num_pred)
                 
                 time_arr = list(range(total_len))
                 
-                real_full = list(state['realtime_real_buffer'][: input_length])
+                real_output_denorm = list(state["real_output_denorm"][: input_length])
                 if num_new_real > 0:
-                    real_full.extend(state['realtime_real_buffer'][input_length :])
-                if len(real_full) < total_len:
-                    real_full.extend([np.nan] * (total_len - len(real_full)))
+                    real_output_denorm.extend(state["real_output_denorm"][input_length:])
+                if len(real_output_denorm) < total_len:
+                    real_output_denorm.extend([np.nan] * (total_len - len(real_output_denorm)))
                 
-                pred_full = [np.nan] * input_length
-                pred_full.extend(list(state['realtime_pred_buffer']))
-                if len(pred_full) < total_len:
-                    pred_full.extend([np.nan] * (total_len - len(pred_full)))
+                prediction = [np.nan] * input_length
+                prediction.extend(list(state["prediction"]))
+                if len(prediction) < total_len:
+                    prediction.extend([np.nan] * (total_len - len(prediction)))
                 
-                min_len = min(len(real_full), len(pred_full), len(time_arr))
-                real_full = real_full[:min_len]
-                pred_full = pred_full[:min_len]
+                min_len = min(len(real_output_denorm), len(prediction), len(time_arr))
+                real_output_denorm = real_output_denorm[:min_len]
+                prediction = prediction[:min_len]
                 time_arr = time_arr[:min_len]
                 
                 _log.info("Итого собрано: %d точек", min_len)
-                _log.info("Первые 10 реальных: %s", real_full[:10])
-                _log.info("Первые 10 предсказаний: %s", pred_full[:10])
+                _log.info("Первые 10 реальных: %s", real_output_denorm[:10])
+                _log.info("Первые 10 предсказаний: %s", prediction[:10])
                 
                 if min_len <= 100:
-                    predictor.plot_comparison(pred_full, real_full, len_data=min_len)
+                    predictor.plot_comparison(prediction, real_output_denorm, len_data=min_len)
                 else:
-                    predictor.plot_big_comparison(pred_full, real_full, len_data=min_len)
+                    predictor.plot_big_comparison(prediction, real_output_denorm, len_data=min_len)
             except Exception as e:
                 _log.error("Ошибка при построении графика: %s", str(e))
         
