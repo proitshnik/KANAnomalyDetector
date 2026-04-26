@@ -186,7 +186,7 @@ class KANAnomalyDetector:
       else:
         indices = torch.randperm(self.dataset['train_input'].size(0))
         self.dataset['train_input'] = self.dataset['train_input'][indices]
-        self.dataset['train_label'] = self.y_train_tensor[indices]
+        self.dataset['train_label'] = self.dataset['train_label'][indices]
     # сохранение модели
     torch.save(self.model.state_dict(), save_folder_path + filename)
     _log.info("Модель обучена и сохранена в %s", save_folder_path + filename)
