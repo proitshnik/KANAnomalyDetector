@@ -180,7 +180,7 @@ class KANAnomalyDetector:
     os.makedirs(save_folder_path, exist_ok=True)
     # обучение
     for i in range(steps):
-      results = self.model.fit(self.dataset, opt=opt, steps=1, lamb_entropy=1.)
+      results = self.model.fit(self.dataset, opt=opt, steps=1, lamb_entropy=lamb_entropy)
       if not shuffle_steps:
         pass
       else:
