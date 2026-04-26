@@ -103,6 +103,7 @@ if __name__ == "__main__":
     grid = 5
     # opt="Adam"
     steps = 5
+    lamb_entropy = 1.
     
     # ===============================
     # ОБУЧЕНИЕ
@@ -139,7 +140,7 @@ if __name__ == "__main__":
     predictor.build_model(width=width, grid=grid)
     
     _log.info("Начало обучения на %s шагов...", steps)
-    results = predictor.train(shuffle_steps=shuffle_steps, steps=steps)
+    results = predictor.train(shuffle_steps=shuffle_steps, steps=steps, opt=opt, lamb=lamb, lamb_entropy=lamb_entropy)
     if symbolic_view_flag:
         _log.info("Построение символической модели...")
         predictor.symbolic_model_view(train_mode=True)
