@@ -67,6 +67,7 @@ class FileModeWorker(QThread):
             left_range = max(0, seq_start - extra_seq_left)
             right_range = min(predictor.len_X_test, seq_end + extra_seq_right + 1)
             wanted_dot_num = right_range - left_range
+            total_steps = 1 + max(0, (wanted_dot_num - output_length) // step)
 
             _worker_log.info(f"Диапазон: start_index={start_index}, end_index={end_index}, extra_num={extra_num}")
             _worker_log.info(f"Возможные индексы: {min_index} ... {max_index}")
@@ -118,7 +119,7 @@ class FileModeWorker(QThread):
                     self.output_anomaly_signal.emit(msg)
                     self.start_anomaly_signal.emit()
 
-            _worker_log.info(f"Step {1}/{right_range-left_range}: {prediction[-1]}, {real_output_denorm[-1]}")
+            _worker_log.info(f"Шаг {1}/{total_steps}: pred={safe_pick(prediction[:output_length], [*range(output_length)])}, real={safe_pick(real_output_denorm, [*range(output_length)])}")
 
             # Остальные шаги
             for i in range(left_range + 1, right_range):
@@ -171,7 +172,7 @@ class FileModeWorker(QThread):
                     anomaly_indices,
                 )
 
-                _worker_log.info(f"Step {i-left_range+1}/{right_range-left_range}: {prediction[-1]}, {real_output_denorm[-1]}")
+                _worker_log.info(f"Шаг {i-left_range+1}/{total_steps}: pred={prediction[-1]}, real={real_output_denorm[-1]}")
 
                 if len(prediction) >= wanted_dot_num and len(real_output_denorm) >= wanted_dot_num:
                     break
