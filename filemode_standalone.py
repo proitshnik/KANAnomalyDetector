@@ -7,6 +7,7 @@ File Mode.
 # !pip install pykan==0.2.8
 # !pip install -U kaleido==0.2.1
 from app_logging import get_logger, configure_standalone_logging
+from anomaly_reporting import safe_pick
 from core import KANAnomalyDetector
 
 import numpy as np
@@ -27,8 +28,9 @@ if __name__ == "__main__":
     # ПАРАМЕТРЫ
     # ===============================
     
-    # Путь к данным и модели
-    data_path = ""  # Данные для оценки
+    # Путь к файлу с данными для работы в режиме файла
+    data_path = ""
+    # Путь к модели
     model_path = "/content/weights/model"
     
     run_date = datetime.now(timezone.utc)
@@ -171,6 +173,7 @@ if __name__ == "__main__":
     left_range = max(0, seq_start - extra_seq_left)
     right_range = min(predictor.len_X_test, seq_end + extra_seq_right + 1)
     wanted_dot_num = right_range - left_range
+    total_steps = 1 + max(0, (wanted_dot_num - output_length) // step)
     
     _log.info("Диапазон: start_index=%s, end_index=%s, extra_num=%s", start_index, end_index, extra_num)
     _log.info("Возможные индексы: %s ... %s", min_index, max_index)
@@ -197,6 +200,8 @@ if __name__ == "__main__":
     prediction = prediction[:wanted_dot_num]
     real_output_denorm = real_output_denorm[:wanted_dot_num]
     
+    _log.info(f"Шаг 1/{total_steps}: pred={safe_pick(prediction[:output_length], [*range(output_length)])}, real={safe_pick(real_output_denorm, [*range(output_length)])}")
+    
     # Остальные шаги
     for i in range(left_range + 1, right_range):
         input_data_for_prediction, scaler_idfp = predictor.X_test[i], predictor.X_test_scaler[i]
@@ -221,8 +226,7 @@ if __name__ == "__main__":
         prediction = prediction[:wanted_dot_num]
         real_output_denorm = real_output_denorm[:wanted_dot_num]
         
-        _log.debug("Шаг %s/%s: real=%.3f, pred=%.3f", i - left_range + 1, right_range - left_range, 
-                  real_output_denorm[-1], prediction[-1])
+        _log.info(f"Шаг {i-left_range+1}/{total_steps}: pred={prediction[-1]}, real={real_output_denorm[-1]}")
         
         if len(prediction) >= wanted_dot_num and len(real_output_denorm) >= wanted_dot_num:
             break
@@ -231,8 +235,8 @@ if __name__ == "__main__":
     prediction = prediction[:wanted_dot_num]
     real_output_denorm = real_output_denorm[:wanted_dot_num]
     
-    _log.info("Первые 10 предсказаний: %s...", prediction[:10])
-    _log.info("Первые 10 реальных значений: %s...", real_output_denorm[:10])
+    _log.info("Первые 10 предсказаний: %s...", safe_pick(prediction, [*range(10)]))
+    _log.info("Первые 10 реальных значений: %s...", safe_pick(real_output_denorm, [*range(10)]))
     
     # ===============================
     # ВИЗУАЛИЗАЦИЯ
