@@ -1,6 +1,11 @@
 import time
 import os
 
+from app_logging import get_logger, init_default_logging_if_needed
+
+init_default_logging_if_needed()
+_log = get_logger("imitate")
+
 
 def imitate_data(source_file, target_file, input_length=288, interval_sec=300, reset_file=False, stop_check=None):
     """
