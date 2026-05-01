@@ -1,5 +1,10 @@
 import time
 
+from app_logging import get_logger, init_default_logging_if_needed
+
+init_default_logging_if_needed()
+_log = get_logger("monitoring")
+
 
 def monitor_data(monitor_file, input_length=288, output_length=10, interval_sec=5,
                 callback=None, stop_check=None):
@@ -39,6 +44,7 @@ def monitor_data(monitor_file, input_length=288, output_length=10, interval_sec=
 
         except Exception:
             # Ошибки чтения/парсинга файла не останавливают мониторинг, а просто пропускаются
+            _log.warning("Ошибка чтения, пропуск значения")
             pass
 
         time.sleep(interval_sec)
