@@ -71,13 +71,9 @@ class KANAnomalyDetector:
     if normalize_first:
       # нормализация
       if self.train_data.size > 0:
-        # _log.debug("DEBUG 0.1: ", self.train_data)
         self.train_data = self.normalize_train(self.train_data)
-        # _log.debug("DEBUG 0.2: ", self.train_data)
         joblib.dump(self.scaler, "scaler.bin", compress=True)
-      # _log.debug("DEBUG 0.3: ", self.test_data)
       self.test_data = self.normalize_test(self.test_data)
-      # _log.debug("DEBUG 0.4: ", self.test_data)
     return self
 
   def normalize_train(self, data):
@@ -90,7 +86,6 @@ class KANAnomalyDetector:
 
   def denormalize_data(self, data):
     # денормализация
-    # _log.debug("DEBUG 7: ", data, data.reshape(-1, 1))
     data = self.scaler.inverse_transform(data.reshape(-1, 1)).flatten()
     return np.expm1(data)
 
@@ -102,7 +97,6 @@ class KANAnomalyDetector:
 
   def denormalize_sequence_data(self, data, scaler):
     # денормализация
-    # _log.debug("DEBUG 7: ", data, data.reshape(-1, 1))
     data = scaler.inverse_transform(data.reshape(-1, 1)).flatten()
     return np.expm1(data)
 
@@ -151,10 +145,6 @@ class KANAnomalyDetector:
     self.dataset['test_input'] = self.X_test_tensor
     self.dataset['test_label'] = self.y_test_tensor
 
-    # self.dataset['train_input'] = self.X_train_tensor
-    # self.dataset['train_label'] = torch.from_numpy(self.y_train[:,None]).to(self.device)
-    # self.dataset['test_input'] = self.X_test_tensor
-    # self.dataset['test_label'] = torch.from_numpy(self.y_test[:,None]).to(self.device)
     return self
 
   def build_model(self, width=None, grid=3, k=3, seed=0):
@@ -312,9 +302,7 @@ class KANAnomalyDetector:
     # денормализация из-за нормализации
     if denormalize:
       if not normalize_sequence:
-        # _log.debug("DEBUG 5: ", prediction)
         prediction = self.denormalize_data(prediction)
-        # _log.debug("DEBUG 6: ", prediction)
       else:
         prediction = self.denormalize_sequence_data(prediction, scaler)
 
