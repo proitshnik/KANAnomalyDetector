@@ -161,7 +161,6 @@ if __name__ == "__main__":
         prediction = []
         real_output_denorm = []
         
-        # _log.debug("DEBUG 1: ", input_data_for_prediction)
         input_data_for_prediction, scaler_idfp = predictor.X_test[0], predictor.X_test_scaler[0]
         prediction.extend(
             np.round(
@@ -174,16 +173,13 @@ if __name__ == "__main__":
                 decimals=3
             )
         )
-        # _log.debug("DEBUG 2: ", prediction)
         
-        # _log.debug("DEBUG 3: ", real_output)
         real_output, scaler_ro = predictor.y_test[0], predictor.y_test_scaler[0]
         if denormalize:
             if not normalize_sequence:
                 real_output_denorm.extend(
                     np.round(predictor.denormalize_data(real_output).tolist(), decimals=3)
                 )
-                # _log.debug("DEBUG 4: ", real_output_denorm)
             else:
                 real_output_denorm.extend(
                     np.round(
@@ -193,20 +189,11 @@ if __name__ == "__main__":
                 )
         else:
             real_output_denorm.extend(real_output)
-            # _log.debug("DEBUG 5: ", real_output_denorm)
         
-        # _log.debug("log 1")
-        # _log.debug(prediction)
-        # _log.debug(real_output_denorm)
-        
-        if output_length < wanted_dot_num:
+       if output_length < wanted_dot_num:
             range_num = math.ceil((wanted_dot_num - output_length) / step)
             if range_num > predictor.len_X_test:
                 range_num = predictor.len_X_test
-            # _log.debug("log 2")
-            # _log.debug((output_length, wanted_dot_num, step, range_num))
-            # if wanted_dot_num < range_num * output_length:
-            #   wanted_dot_num = range_num * output_length
             
             for i in range(1, range_num + 1):
                 input_data_for_prediction, scaler_idfp = predictor.X_test[i], predictor.X_test_scaler[i]
@@ -219,13 +206,9 @@ if __name__ == "__main__":
                     ).tolist(), 
                     decimals=3
                 )
-                # prediction.extend(np.round(predictor.predict(input_data_for_prediction).tolist(), decimals=3)[output_length - step:])
                 prediction.extend(pr_temp[output_length - step:])
-                # _log.debug(f"{i} log 3")
-                # _log.debug(pr_temp)
                 
                 real_output, scaler_ro = predictor.y_test[i], predictor.y_test_scaler[i]
-                # r_temp = predictor.denormalize_data(real_output).tolist()
                 if denormalize:
                     if not normalize_sequence:
                         real_output_denorm.extend(
@@ -243,11 +226,6 @@ if __name__ == "__main__":
                         )
                 else:
                     real_output_denorm.extend(real_output[output_length - step:])
-                # real_output_denorm.extend(r_temp[output_length - step:])
-                # _log.debug(r_temp)
-                # _log.debug(f"{i} log 4")
-                # _log.debug(prediction)
-                # _log.debug(real_output_denorm)
         
         prediction = prediction[:wanted_dot_num]
         real_output_denorm = real_output_denorm[:wanted_dot_num]
