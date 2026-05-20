@@ -109,6 +109,10 @@ class MainWindow(QWidget):
         self.realtime_imitate_worker = None
         self.realtime_monitor_worker = None
         self.realtime_setup_worker = None
+        self._file_kan_detector = None
+        self._file_cache_key = None
+        self._realtime_kan_detector = None
+        self._realtime_model_path = None
         self.is_running = False
         self.stop_requested = False
         
@@ -177,6 +181,55 @@ class MainWindow(QWidget):
                 left = max(0, right - 16)
                 vb.setXRange(left, right, padding=0)
 
+    def _release_kan_detector(self, file_mode=False):
+        """
+        Сбрасывает кэшированный KAN. 
+        Если file_mode=True, сбрасывает кэш режима файла, иначе - режима реального времени.
+        """
+        if file_mode:
+            if self._file_kan_detector is not None:
+                self._file_kan_detector.model = None
+                self._file_kan_detector = None
+            self._file_cache_key = None
+        else:
+            if self._realtime_kan_detector is not None:
+                self._realtime_kan_detector.model = None
+                self._realtime_kan_detector = None
+            self._realtime_model_path = None
+
+    def _release_realtime_kan_if_model_changed(self, model_path):
+        """
+        Сбрасывает кэшированный KAN, если путь модели изменился.
+        """
+        if model_path != self._realtime_model_path:
+            self._release_kan_detector(file_mode=False)
+
+    def _stop_worker(self, worker):
+        if worker is None:
+            return
+        if isinstance(worker, (FileModeWorker, RealTimeMonitorWorker)):
+            worker.model = None
+        try:
+            worker.disconnect()
+        except TypeError:
+            pass
+        worker.deleteLater()
+
+    def _stop_file_workers(self):
+        self._stop_worker(self.file_mode_worker)
+        self._stop_worker(self.file_setup_worker)
+        self.file_mode_worker = None
+        self.file_setup_worker = None
+
+    def _stop_realtime_workers(self, imitate=True):
+        self._stop_worker(self.realtime_monitor_worker)
+        self._stop_worker(self.realtime_setup_worker)
+        self.realtime_monitor_worker = None
+        self.realtime_setup_worker = None
+        if imitate:
+            self._stop_worker(self.realtime_imitate_worker)
+            self.realtime_imitate_worker = None
+
     def _has_active_threads(self):
         """Проверяет, есть ли активные потоки"""
         return (
@@ -230,38 +283,61 @@ class MainWindow(QWidget):
         """
         config = self._get_model_config()
         anomaly_module = AnomalyDetectorFactory.create(anomaly_mode, threshold_percent=percent)
-        model = KANAnomalyDetector(
-            data_path,
-            input_length=config["input_length"],
-            output_length=config["output_length"],
-            test_size=config["test_size"],
-            step=config["step"],
-            device=config["device"],
-        )
-        
+
         if prepare_data:
-            # Для файлового режима полная подготовка данных
-            processing_config = self._get_processing_config()
-            model.load_data()
-            model.split_and_normalize(
-                usage_volume=processing_config["usage_volume"], 
-                normalize_first=processing_config["normalize_first"]
-            )
-            
-            # Применяем фильтрацию, если нужно (учитываем, что normalize_sequence включен и после фильтрации)
-            if use_filter:
-                _ui_log.info("Фильтрация: ВКЛЮЧЕНА")
-                model.filter_test_data()
+            file_cache_key = (model_path, data_path, use_filter)
+            if file_cache_key == self._file_cache_key and self._file_kan_detector is not None:
+                model = self._file_kan_detector
             else:
-                _ui_log.info("Фильтрация: ОТКЛЮЧЕНА")
-            
-            model.prepare_data(
-                shuffle=processing_config["shuffle"], 
-                normalize_sequence=processing_config["normalize_sequence"]
+                self._release_kan_detector(file_mode=True)
+                model = KANAnomalyDetector(
+                    data_path,
+                    input_length=config["input_length"],
+                    output_length=config["output_length"],
+                    test_size=config["test_size"],
+                    step=config["step"],
+                    device=config["device"],
+                )
+                # Для файлового режима полная подготовка данных
+                processing_config = self._get_processing_config()
+                model.load_data()
+                model.split_and_normalize(
+                    usage_volume=processing_config["usage_volume"],
+                    normalize_first=processing_config["normalize_first"],
+                )
+
+                # Применяем фильтрацию, если нужно (учитываем, что normalize_sequence включен и после фильтрации)
+                if use_filter:
+                    _ui_log.info("Фильтрация: ВКЛЮЧЕНА")
+                    model.filter_test_data()
+                else:
+                    _ui_log.info("Фильтрация: ОТКЛЮЧЕНА")
+
+                model.prepare_data(
+                    shuffle=processing_config["shuffle"],
+                    normalize_sequence=processing_config["normalize_sequence"],
+                )
+                model.build_model(width=config["width"], grid=config["grid"])
+                model.load_model(model_path)
+                self._file_kan_detector = model
+                self._file_cache_key = file_cache_key
+        elif model_path == self._realtime_model_path and self._realtime_kan_detector is not None:
+            model = self._realtime_kan_detector
+        else:
+            self._release_realtime_kan_if_model_changed(model_path)
+            model = KANAnomalyDetector(
+                data_path,
+                input_length=config["input_length"],
+                output_length=config["output_length"],
+                test_size=config["test_size"],
+                step=config["step"],
+                device=config["device"],
             )
-        
-        model.build_model(width=config["width"], grid=config["grid"])
-        model.load_model(model_path)
+            model.build_model(width=config["width"], grid=config["grid"])
+            model.load_model(model_path)
+            self._realtime_kan_detector = model
+            self._realtime_model_path = model_path
+
         return anomaly_module, model, config
 
     def _init_graph_and_buffers(self):
@@ -302,10 +378,14 @@ class MainWindow(QWidget):
         self.stop_requested = False
 
         if self.controlLayout.realtime_mode.isChecked():
+            # Сбрасываем кэш file mode, чтобы не держать оба режима в RAM
+            self._release_kan_detector(file_mode=True)
             self.serviceLayout.data_file_label.setVisible(False)
             self.serviceLayout.load_data_button.setVisible(False)
             self.start_realtime_monitoring(anomaly_mode, percent)
         else:
+            # Сбрасываем кэш realtime mode, чтобы не держать оба режима в RAM
+            self._release_kan_detector(file_mode=False)
             self.serviceLayout.data_file_label.setVisible(True)
             self.serviceLayout.load_data_button.setVisible(True)
             self.start_file_mode(start_index, end_index, extra_num, anomaly_mode, percent, use_filter)
@@ -336,7 +416,12 @@ class MainWindow(QWidget):
                 _ui_log.warning("Инициализация отменена по запросу пользователя")
                 self.controlLayout.use_filter.setEnabled(True)
                 self._restore_buttons()
+                self._stop_worker(self.file_setup_worker)
+                self.file_setup_worker = None
                 return
+
+            self._stop_worker(self.file_setup_worker)
+            self.file_setup_worker = None
 
             self.file_mode_worker = FileModeWorker(
                 model, anomaly_module, config, start_index, end_index, extra_num, use_filter
@@ -353,6 +438,8 @@ class MainWindow(QWidget):
             _ui_log.error(f"Ошибка инициализации модели: {msg}")
             self.controlLayout.use_filter.setEnabled(True)
             self._restore_buttons()
+            self._stop_worker(self.file_setup_worker)
+            self.file_setup_worker = None
 
         self.file_setup_worker.ready_signal.connect(on_file_ready)
         self.file_setup_worker.error_signal.connect(on_file_error)
@@ -381,7 +468,12 @@ class MainWindow(QWidget):
             if self.stop_requested:
                 _ui_log.warning("Инициализация отменена по запросу пользователя")
                 self._restore_buttons()
+                self._stop_worker(self.realtime_setup_worker)
+                self.realtime_setup_worker = None
                 return
+
+            self._stop_worker(self.realtime_setup_worker)
+            self.realtime_setup_worker = None
 
             # Запускаем имитацию только если она включена
             if imit_mon_path.get_imitation_enabled():
@@ -413,6 +505,8 @@ class MainWindow(QWidget):
             _ui_log.error(f"Ошибка запуска realtime: {msg}")
             self.controlLayout.use_filter.setEnabled(True)
             self._restore_buttons()
+            self._stop_worker(self.realtime_setup_worker)
+            self.realtime_setup_worker = None
 
         self.realtime_setup_worker.ready_signal.connect(on_ready)
         self.realtime_setup_worker.error_signal.connect(on_error)
@@ -463,6 +557,8 @@ class MainWindow(QWidget):
             _ui_log.warning("Имитация остановлена пользователем по запросу остановки режима реального времени")
         else:
             _ui_log.info("Имитация завершена")
+        self._stop_worker(self.realtime_imitate_worker)
+        self.realtime_imitate_worker = None
 
     def on_monitor_finished(self):
         """Callback при завершении работы мониторинга в режиме реального времени"""
@@ -472,6 +568,7 @@ class MainWindow(QWidget):
             _ui_log.warning("Режим реального времени остановлен пользователем")
         else:
             _ui_log.info("Режим реального времени завершен успешно")
+        self._stop_realtime_workers(imitate=False)
 
     def on_file_mode_finished(self):
         """Callback при завершении работы в режиме файла"""
@@ -482,6 +579,7 @@ class MainWindow(QWidget):
             _ui_log.warning("Режим файла остановлен пользователем")
         else:
             _ui_log.info("Режим файла завершен успешно")
+        self._stop_file_workers()
 
     def stop_work(self):
         """Callback для остановки работы по запросу пользователя - устанавливает флаг запроса остановки и отключает кнопку 'Остановить'"""
