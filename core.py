@@ -162,7 +162,9 @@ class KANAnomalyDetector:
       raise FileNotFoundError(f"Файл модели {model_path} не найден")
 
     # загрузка данных модели
-    self.model.load_state_dict(torch.load(model_path))
+    state = torch.load(model_path, map_location=self.device, weights_only=True)
+    self.model.load_state_dict(state)
+    del state
     self.model.eval()
     _log.info("Модель загружена из %s", model_path)
 
@@ -296,8 +298,9 @@ class KANAnomalyDetector:
     if input_tensor.size(0) < batch_size:
       input_tensor = input_tensor.expand(batch_size, -1)
     input_tensor = input_tensor.to(self.device)
-    prediction = self.model(input_tensor)
-    prediction = prediction[0].detach().cpu().numpy().flatten()
+    with torch.no_grad():
+      prediction = self.model(input_tensor)
+    prediction = prediction[0].cpu().numpy().flatten()
 
     # денормализация из-за нормализации
     if denormalize:
