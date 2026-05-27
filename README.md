@@ -1,8 +1,8 @@
 # KANAnomalyDetector
 
-![KANAnomalyDetector в режиме реального времени](assets/KANAnomalyDetector_realtime_mode.png)
-
-![KANAnomalyDetector в режиме файла](assets/KANAnomalyDetector_file_mode.png)
+<div align="center">
+<img src="assets/KANAnomalyDetector_both_modes.png" width="720">
+</div>
 
 # Сборка
 
