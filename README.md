@@ -150,7 +150,7 @@ $$
 
 <div align="center">
   <a href="docs/Poster_presentation.pdf">
-    <kbd style="padding: 9px 17px; font-size: 14px; background-color: #542f69; color: white; border-radius: 7px; border: 1px solid #E5E5E5; display: inline-block;">🪧 Открыть «Новый математический метод обнаружения аномалий в природных временных рядах» </br>(Poster PDF, 1920x1080)</kbd>
+    <img src="https://img.shields.io/badge/%D0%9E%D1%82%D0%BA%D1%80%D1%8B%D1%82%D1%8C%20%C2%AB%D0%9D%D0%BE%D0%B2%D1%8B%D0%B9%20%D0%BC%D0%B0%D1%82%D0%B5%D0%BC%D0%B0%D1%82%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B8%D0%B9%20%D0%BC%D0%B5%D1%82%D0%BE%D0%B4%20%D0%BE%D0%B1%D0%BD%D0%B0%D1%80%D1%83%D0%B6%D0%B5%D0%BD%D0%B8%D1%8F%20%D0%B0%D0%BD%D0%BE%D0%BC%D0%B0%D0%BB%D0%B8%D0%B9%20%D0%B2%20%D0%BF%D1%80%D0%B8%D1%80%D0%BE%D0%B4%D0%BD%D1%8B%D1%85%20%D0%B2%D1%80%D0%B5%D0%BC%D0%B5%D0%BD%D0%BD%D1%8B%D1%85%20%D1%80%D1%8F%D0%B4%D0%B0%D1%85%C2%BB-Poster%20PDF%20(1920%C3%971080)-E5E5E5?labelColor=542f69&style=for-the-badge" alt="Открыть «Новый математический метод обнаружения аномалий в природных временных рядах» (Poster PDF, 1920×1080)">
   </a>
 </div>
 
